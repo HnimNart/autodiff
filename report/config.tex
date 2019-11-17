@@ -1,0 +1,79 @@
+\documentclass[12pt, a4paper]{article}
+\usepackage [T1]{fontenc}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{bm}
+\usepackage{wasysym}
+\usepackage{float}
+\usepackage{pifont}
+\usepackage{amsthm}
+\usepackage{mathtools}
+\usepackage[toc,page]{appendix}
+\setcounter{tocdepth}{1}
+\usepackage{listings}
+\usepackage[cal=cm]{mathalfa}
+\usepackage[version=3]{mhchem}
+\usepackage{algorithmic}
+\usepackage[nottoc]{tocbibind}
+\usepackage[normalem]{ulem}
+\usepackage{multirow}
+\usepackage{tcolorbox}
+\usepackage{adjustbox}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{tabulary}
+\usepackage{color}
+\usepackage{colortbl}
+\usepackage{gensymb}
+\usepackage{pdfpages}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{listings}
+\usepackage{diagbox}
+\usepackage{hyperref}
+\usepackage[section]{placeins}
+\usepackage{bbm}
+\usepackage[linesnumbered,algoruled]{algorithm2e}
+
+% Code format
+\usepackage{minted}
+\setminted{
+	frame=lines,
+	framesep=2mm,
+	baselinestretch=1.2,
+	%bgcolor=background,
+	linenos,
+	fontsize=\footnotesize,
+	breaklines=true
+}
+
+
+% Math ops
+\usepackage{amsmath,amssymb}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\EX}{\mathbb{E}}% expected value
+
+\DeclarePairedDelimiter{\ceil}{\lceil}{\rceil}
+\DeclarePairedDelimiter{\floor}{\lfloor}{\rfloor}
+
+\newcommand{\dunderline}[1]{\underline{\underline{#1}}}
+\newcommand{\euler}[1]{\ensuremath{\ \mathrm{e}^{#1}}}
+\newcommand{\ma}[1]{\textbf{#1}}
+\newcommand{\ve}[1]{\textbf{#1}}
+\newcommand{\ap}[1]{\mathrm{\overline{#1}}}
+\newcommand{\pp}[1]{\left( {#1} \right)}
+\newcommand{\abs}[1]{\left|   {#1} \right|  }
+\newcommand{\forn}[2]{{#1} \rightarrow {#2} \quad \text{for} \quad n \rightarrow \infty }
+\newcommand{\forN}[2]{{#1} \rightarrow {#2} \quad \text{for} \quad N \rightarrow \infty }
+\newcommand{\folg}[3]{ \{#1_{#3}\}_{#3 = #2}^{\infty} }
+\newcommand{\folgc}[3]{ \{#1_{#3}\}_{#3 = #2}^{c} }
+\newcommand{\ip}[2]{\langle{#1} , {#2}\rangle}
+
+\newcommand{\RR}{ \mathbb{R} }
+\newcommand{\NN}{ \mathbb{N} }
+\newcommand{\CC}{ \mathbb{C} }
+\newcommand{\for}{  \quad \text{for} \quad  }
+\newcommand{\as}{  \quad \text{as} \quad  }

@@ -1,21 +1,20 @@
 \documentclass[12pt, a4paper]{article}
 \usepackage [T1]{fontenc}
 \usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx}
 \usepackage[utf8]{inputenc}
 \usepackage[english]{babel}
 \usepackage{bm}
-\usepackage{wasysym}
 \usepackage{float}
 \usepackage{pifont}
-\usepackage{amsthm}
-\usepackage{mathtools}
+
 \usepackage[toc,page]{appendix}
-\setcounter{tocdepth}{1}
-\usepackage{listings}
-\usepackage[cal=cm]{mathalfa}
-\usepackage[version=3]{mhchem}
-\usepackage{algorithmic}
 \usepackage[nottoc]{tocbibind}
+\setcounter{tocdepth}{1}
+
+
+\usepackage{algorithmic}
+
 \usepackage[normalem]{ulem}
 \usepackage{multirow}
 \usepackage{tcolorbox}
@@ -30,14 +29,20 @@
 \usepackage{pdfpages}
 \usepackage{caption}
 \usepackage{subcaption}
-\usepackage{listings}
 \usepackage{diagbox}
 \usepackage{hyperref}
 \usepackage[section]{placeins}
 \usepackage{bbm}
 \usepackage[linesnumbered,algoruled]{algorithm2e}
 
+%% Biblography 
+\usepackage[style=numeric-comp, 
+backend=bibtex]{biblatex}
+
+\addbibresource{main.bib}
+
 % Code format
+\usepackage{listings}
 \usepackage{minted}
 \setminted{
 	frame=lines,
@@ -49,9 +54,19 @@
 	breaklines=true
 }
 
+%% Bibliography
+%\usepackage[
+%hyperref=auto,
+%backend=biber,
+%style=alphabetic,
+%citestyle=alphabetic,
+%defernumbers=true,
+%maxnames=99
+%]{biblatex}
 
 % Math ops
-\usepackage{amsmath,amssymb}
+\usepackage{mathtools}
+\usepackage{amsmath, amssymb}
 \DeclareMathOperator*{\argmax}{arg\,max}
 \DeclareMathOperator*{\argmin}{arg\,min}
 \DeclareMathOperator*{\EX}{\mathbb{E}}% expected value

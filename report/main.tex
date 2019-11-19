@@ -1,9 +1,10 @@
-\input{config.tex}
+\input{config}
 \author{Minh}
 \begin{document}
 	\begin{titlepage}
 		\centering
-		\includegraphics[width=1.1\textwidth]{KuLogo.png}\par\vspace{1cm}
+		\includegraphics[width=\textwidth]{KuLogo.png}
+		\par\vspace{1cm}
 		\vspace{1cm}
 		{\scshape\Large Title \\
 			NDAK15014U\par}
@@ -20,5 +21,25 @@
 	\end{titlepage}
 	\newpage
 	\section{Introduction}
+
+
+  \section{Overview}
+  \begin{table}[H]
+    \centering
+    \begin{tabular}{l|ll}
+      \textbf{Langauge} & Mode & Implementation  \\ \hline
+      Julia                &     & \\
+      Swift (TensorFlow?)  &     & \\
+      Tensorflow           &     & \\
+      STAN                 &     & \\
+    \end{tabular}
+    \caption{Overview of languages}
+    \label{tab:overview}
+  \end{table}
+
+
+  \nocite{small}
+  \printbibliography
+
 
 \end{document}

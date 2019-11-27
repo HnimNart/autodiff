@@ -1,4 +1,5 @@
 \input{config}
+\addbibresource{main.bib}
 \author{Minh}
 \begin{document}
 	\begin{titlepage}
@@ -21,24 +22,38 @@
 	\end{titlepage}
 	\newpage
 	\section{Introduction}
+	\subsection{Motivation}
 
 
   \section{Overview}
   \begin{table}[H]
     \centering
-    \begin{tabular}{l|ll}
-      \textbf{Langauge} & Mode & Implementation  \\ \hline
-      Julia                &     & \\
-      Swift (TensorFlow?)  &     & \\
-      Tensorflow           &     & \\
-      STAN                 &     & \\
+    \begin{tabular}{l|lll}
+      \textbf{Langauge}  & Name & Mode & Implementation  \\ \hline
+      Julia                & JuliaDiff\footnote{https://www.juliadiff.org/} &  F/R  & OO \\
+      Swift (TensorFlow?)  & &     & \\
+      Tensorflow           & Tensorflow   & R  & OO \\
+      STAN                 &   &  & OO \\
     \end{tabular}
     \caption{Overview of languages}
     \label{tab:overview}
   \end{table}
 
+\subsection{Julia}
+In forwardDiff it uses extended dual numbers for higher order dimensions 
 
-  \nocite{small}
+
+
+\subsection{Tensorflow}
+
+Reverse-mode using gradient tape
+
+
+
+
+
+  \newpage
+  \nocite{*}
   \printbibliography
 
 

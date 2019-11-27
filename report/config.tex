@@ -35,11 +35,12 @@
 \usepackage{bbm}
 \usepackage[linesnumbered,algoruled]{algorithm2e}
 
-%% Biblography 
-\usepackage[style=numeric-comp, 
-backend=bibtex]{biblatex}
+%% Biblography
+\usepackage[style=numeric-comp,
+            hyperref=auto,
+            backend=biber,
+            backend=bibtex]{biblatex}
 
-\addbibresource{main.bib}
 
 % Code format
 \usepackage{listings}
@@ -48,21 +49,10 @@ backend=bibtex]{biblatex}
 	frame=lines,
 	framesep=2mm,
 	baselinestretch=1.2,
-	%bgcolor=background,
 	linenos,
 	fontsize=\footnotesize,
 	breaklines=true
 }
-
-%% Bibliography
-%\usepackage[
-%hyperref=auto,
-%backend=biber,
-%style=alphabetic,
-%citestyle=alphabetic,
-%defernumbers=true,
-%maxnames=99
-%]{biblatex}
 
 % Math ops
 \usepackage{mathtools}

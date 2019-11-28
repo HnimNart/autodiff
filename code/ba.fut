@@ -2,8 +2,6 @@ import "ad"
 import "lib/github.com/athas/vector/vspace"
 
 
-
-
 let N_CAM_PARAMS: i32 = 11
 let ROT_IDX: i32 = 0
 let CENTER_IDX: i32 = 3

@@ -1,4 +1,5 @@
 \input{config}
+\usepackage{hyperref}
 \addbibresource{main.bib}
 \author{Minh}
 \begin{document}
@@ -7,54 +8,135 @@
 		\includegraphics[width=\textwidth]{KuLogo.png}
 		\par\vspace{1cm}
 		\vspace{1cm}
-		{\scshape\Large Title \\
-			NDAK15014U\par}
+		{\scshape\Large Automatic Differentiation \\
+			\par}
 		\vspace{1.5cm}
-		{\Large\itshape Duc Minh Tran }\\
+		{\Large\itshape  Minh Duc Tran }\\
 		\vspace{0.5cm}
 		{\scshape\large cwz688 \\ \par}
 		\vfill
-		{\Large\scshape Template \par}
+		{\Large\scshape Project \par}
 		\vfill
 		\par
 		\vfill
 		{\large \today\par}
 	\end{titlepage}
 	\newpage
-	\section{Introduction}
-	\subsection{Motivation}
+\section{Introduction}
+Nothing for now
+%	\subsection{Motivation}
+
+%
+%  \section{Overview}
+%  \begin{table}[H]
+%    \centering
+%    \begin{tabular}{l|lll}
+%      \textbf{Langauge}  & Name & Mode & Implementation  \\ \hline
+%      Julia                & JuliaDiff\footnote{https://www.juliadiff.org/} &  F/R  & OO \\
+%      Swift (TensorFlow?)  & &     & \\
+%      Tensorflow           & Tensorflow   & R  & OO \\
+%      STAN                 &   &  & OO \\
+%    \end{tabular}
+%    \caption{Overview of languages}
+%    \label{tab:overview}
+%  \end{table}
+%
+%\subsection{Julia}
+%In forwardDiff it uses extended dual numbers for higher order dimensions 
+%
+%
+%
+%\subsection{Tensorflow}
+%
+%Reverse-mode using gradient tape
 
 
-  \section{Overview}
-  \begin{table}[H]
-    \centering
-    \begin{tabular}{l|lll}
-      \textbf{Langauge}  & Name & Mode & Implementation  \\ \hline
-      Julia                & JuliaDiff\footnote{https://www.juliadiff.org/} &  F/R  & OO \\
-      Swift (TensorFlow?)  & &     & \\
-      Tensorflow           & Tensorflow   & R  & OO \\
-      STAN                 &   &  & OO \\
-    \end{tabular}
-    \caption{Overview of languages}
-    \label{tab:overview}
-  \end{table}
-
-\subsection{Julia}
-In forwardDiff it uses extended dual numbers for higher order dimensions 
+\section{Sparsity}
+This section is based on Julia's approach to sparse AD computation. 
+Link: \url{https://github.com/JuliaDiffEq/SparseDiffTools.jl}. 
 
 
+\subsection{Example: Data-independent sparsity}
 
-\subsection{Tensorflow}
+Below is a function which performs a 1D-convolution on the input array $x$ of dimension $n$. 
+The Jacobian of such a function is the tri-diagonal matrix shown in Figure \ref{fig:tridiag}. 
+\begin{minted}{C}
+int* f (int* x, int n) {
+  retval = malloc(sizeof(int) * n);
+  for (int i = 1; i < n - 1; i++) {
+    retval[i] = x[i-1] + x[i] + x[i+1];
+  }
+  retval[0] = x[0] + x[1];
+  retval[n-1] = x[n-1] + x[n-2];
+  return retval;
+}
+\end{minted}
+\begin{figure}[H]
+	$$ J_{f} = \left(\begin{matrix}
+	\frac{\partial f_1}{\partial x_1} & \frac{\partial f_1}{\partial x_2} & 0 & 0 & 0 \\
+	\frac{\partial f_2}{\partial x_1}& \frac{\partial f_2}{\partial x_2} & \frac{\partial f_2}{\partial x_3} & 0 & 0\\
+	0 & \frac{\partial f_3}{\partial x_2} & \frac{\partial f_3}{\partial x_3} & \frac{\partial f_3}{\partial x_4} & 0\\
+	0 & 0 & \frac{\partial f_4}{\partial x_3} & \frac{\partial f_4}{\partial x_4} & \frac{\partial f_4}{\partial x_5} \\
+	0 & 0 & 0 & \frac{\partial f_5}{\partial x_4} & \frac{\partial f_5}{\partial x_5}
+	\end{matrix}\right) $$
+	\caption{Jacobian from \texttt{f} for $n=5$}
+	\label{fig:tridiag}
+\end{figure}
+The sparsity of the Jacobian in this case is independent of the data, e.g. $x_1$ will always be independent of $f_5$ 
+or more generally the off tri-diagonal elements will always be zero. 
+Of course the case where the input value is zero, e.g. $x_1 = 0$  the entry $\frac{\partial f_1}{\partial x_1}$ will also be zero, 
+which would then be \emph{data} dependent.
 
-Reverse-mode using gradient tape
+\subsection{Example: Bundle Adjustment - Data-dependent}
+For a data-dependent example we use  Bundle Adjustment \footnote{Link to Wiki} as example and 
+show that the layout of the Jacobian depends on how we represent our data as shown in Figure \ref{fig:jacobian-matrix-for-a-bundle-adjustment-problem-con-sisting-of-3-cameras-and-4-points}.
+Note that for showing the natural sparsity of the Jacobian we have to represent the input data as one long vector
+i.e. our input data has the form $\lbrack \texttt{cam1} \ \texttt{cam2} \ \texttt{cam3}\ X_1\ X_2\ X_3\ X_4 \rbrack $, 
+where only one pair of \texttt{camX} and $X_i$ are non-zero for each data-row. 
+The Jacobian sparsity pattern hence depends on the input, for example if we swap the columns \texttt{cam1} and \texttt{cam2}, keeping all else the same,
+the sparsity pattern of the Jacobian also changes. 
+\begin{figure}[H]
+	\centering
+	%\includegraphics[width=0.7\linewidth]{../../../Desktop/Jacobian-matrix-for-a-bundle-adjustment-problem-con-sisting-of-3-cameras-and-4-points}
+	\caption{Data dependent sparse matrix stemming from Bundle Adjustment (Stolen from  \url{https://www.researchgate.net/figure/Jacobian-matrix-for-a-bundle-adjustment-problem-con-sisting-of-3-cameras-and-4-points_fig1_284154527})}
+	\label{fig:jacobian-matrix-for-a-bundle-adjustment-problem-con-sisting-of-3-cameras-and-4-points}
+\end{figure}
+
+
+\subsection{Sparsity w.r.t. performance}
+For Forward-mode AD we can reduce the computation of both types of sparsity with a \texttt{colour} vector, 
+which  denotes which input parameters are independent (or dependent) of each other. 
+This corresponds to solving a graph-colouring problem.
+For example for the function \texttt{f} above we can use a color vector 
+with three colours as each output value depends on at most three input values. 
+A colour vector for $n=5$ could then be $\lbrack c_0, c_1, c_2, c_1, c_0\rbrack$ where input values with the 
+same colour can be computed during the same forward-sweep, so we reduce the number of 
+forward calls to the number of colours used. Worth noting is that \texttt{f}'s colour vector 
+ \emph{always}  contains 3 colours; independent of $n$ so the number of forward calls 
+ is effectively reduced by  $n-3 + 1$ in this case. (Plus one since we need to compute the colour vector)\newline 
+ For finding the colour-vector we can perform a forward sweep of the function 
+ with some random input and use some underlying data-structure to solve the graph-colouring problem. 
+ Alternatively can one let the user provide the color vector. 
+ 
+ \subsubsection{Bundle Adjustment revisited}
+ For Bundle Adjustment we can also use the same approach by seeding the forward sweep 
+ with the camera and point data. Using the data it's possible to figure out the dependencies and generate a 
+ coloring, which in this case would be a matrix, one for each data-row. 
+ In stochastic gradient descent methods, like used Bundle Adjustment, this color vector can provide a speed-up on subsequent 
+ computations of the Jacobian. 
+ However if the data is only used once, this approach requires that we compute the coloring again and again
+ and hence would not be very efficient. 
 
 
 
+\subsection{Sparsity w.r.t. Memory}
+Julia and STAN uses a sparse data structures but to my knowledge not feasible in Futhark?
+Need more time to look into this. 
 
 
-  \newpage
-  \nocite{*}
-  \printbibliography
+\newpage
+\nocite{*}
+\printbibliography
 
 
 \end{document}

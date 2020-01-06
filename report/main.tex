@@ -8,50 +8,111 @@
 		\includegraphics[width=\textwidth]{KuLogo.png}
 		\par\vspace{1cm}
 		\vspace{1cm}
+
 		{\scshape\Large Automatic Differentiation \\
 			\par}
+
 		\vspace{1.5cm}
 		{\Large\itshape  Minh Duc Tran }\\
 		\vspace{0.5cm}
 		{\scshape\large cwz688 \\ \par}
 		\vfill
-		{\Large\scshape Project \par}
+
+		{\Large\scshape Master project \par}
+
 		\vfill
 		\par
 		\vfill
 		{\large \today\par}
 	\end{titlepage}
 	\newpage
+
+\begin{abstract}
+	Automatic diff is good
+\end{abstract}
 \section{Introduction}
-Nothing for now
-%	\subsection{Motivation}
+Many important problems require taking derivatives to be solved. Such problems include 
+Bundle Adjustment (BA) (cite) and XX. While finding the derivative for simple trivial functions 
+can be done by hand. This method is accurate and often the 
+fastest method when executed but it scales poorly for problems of real world relevance as 
+finding the derivatives by hand is time consuming and can be error prone.  We hence seek to 
+automate the process of finding these derivatives. \newline 
 
-%
-%  \section{Overview}
-%  \begin{table}[H]
-%    \centering
-%    \begin{tabular}{l|lll}
-%      \textbf{Langauge}  & Name & Mode & Implementation  \\ \hline
-%      Julia                & JuliaDiff\footnote{https://www.juliadiff.org/} &  F/R  & OO \\
-%      Swift (TensorFlow?)  & &     & \\
-%      Tensorflow           & Tensorflow   & R  & OO \\
-%      STAN                 &   &  & OO \\
-%    \end{tabular}
-%    \caption{Overview of languages}
-%    \label{tab:overview}
-%  \end{table}
-%
-%\subsection{Julia}
-%In forwardDiff it uses extended dual numbers for higher order dimensions 
-%
-%
-%
-%\subsection{Tensorflow}
-%
-%Reverse-mode using gradient tape
+The simplest method to implement is \textit{numerical differentiation} methods 
+but is slow in execution as it requires two evaluations per scalar derivative. 
+It also suffers from numerical imprecision. A more precise method is 
+\textit{symbolic differentiation}, which are often used in  ''mathematical'' languages
+like Matlab, Mathematica or on your old TI-89.  This generates exact symbolic derivates, but 
+is memory intensive and slow to compute. It can also not handle 
+complex logic such as unbounded loops and hence is not appropriate for general computer programs. 
+For solving most of these issues we turn to \textit{automatic differentiation}, which can 
+compute exact derivatives for an arbitrary computer program. The caveat is however 
+that the implementation must be carefully thought out. We will in this report
+see how one can implement automatic differentiation in a way that minimizes 
+the computational ....
 
 
-\section{Sparsity}
+
+\section{Automatic differentiation}
+Automatic differentiation relies on the fact every computer program, regardless of how complex it is, 
+is a composition of arithmetic operations, like addition, multiplication etc. and exploits the chain rule 
+for composing these derivatives. For example consider the composition of $n$ scalar functions:
+$f(x) = f^n \circ f^{n-1} \circ \cdots \circ f^1 \circ x$. The chain then simply states that the derivate of 
+$f$ w.r.t. $x$ is 
+\begin{equation}
+\frac{\partial f}{\partial x} = \frac{f^L}{f^{L-1}} \frac{f^{L-1}}{f^{L-2}} \cdots \frac{f^1}{x}
+\label{eq:f}
+\end{equation}
+By formulating our function $f(x)$ as a program we are able to see how we can 
+use AD to compute $\frac{\partial f}{\partial x}$. AD has two modes, forward- and reverse. Both of which 
+both have it's own advantages and disadvantages.  
+The main difference between these two is in which direction the terms of each partial derivatives
+are computed. For example in Eq. \ref{eq:f} forward-mode starts from the right most term, i.e. it first computes $\frac{f^1}{x}$
+and traverses to the left. On the other hand does reverse-mode start from $\frac{f^L}{f^{L-1}}$ and accumulate to the right. \newline 
+The example above is simplified for most AD problems and we in the general case 
+have a multi-dimensional function $f : \mathbb{R}^n \to \mathbb{R}^m$  which would then have the $m\times n$  Jacobian matrix $J_f$:
+\begin{figure}[H]
+	$$ J_{f} = \left(\begin{matrix}
+	\frac{\partial f_1}{\partial x_1} & \cdots & \frac{\partial f_1}{\partial x_n} \\
+    \vdots & \ddots & \vdots \\
+	\frac{\partial f_m}{\partial x_1} & \cdots  &  \frac{\partial f_3}{\partial x_n}\\
+	\end{matrix}\right) $$
+	\caption{$m\times n$ Jacobian matrix of $f : \mathbb{R}^n \to \mathbb{R}^m$}
+\end{figure}
+Given an input vector $x \in \mathbf{R}^n$  forward-mode evaluates $f$ once and computes a column of $J_f$. Hence to compute 
+the entire Jacobian we need to perform $n$ sweeps or said differently we need to evaluate $f$ $n$ times. 
+Reverse-mode works in slightly differently. Given an output space vector $y \in \mathbf{R}^m$, a sweep will compute a 
+row of $J_f$. Hence do we need to perform 1 application of $f$ and $m$ reverse-mode sweeps.  We can now see the 
+computational difference between the two modes. When $n << m$ forward-mode is more efficient and vice versa for $n >> m$. 
+Applications such neural networks usually have large input dimensions $n$ compared to output $m$. 
+Libraries like Tensorflow are reverse-mode based implementations. One downside to reverse-mode is that 
+it requires access to intermediate variables and hence require more memory. 
+
+\subsection{Forward-mode implementation}
+The implementation of forward-mode can be done with two strategies:
+\subsubsection*{Source code transformation}
+One of the oldest methods for AD is source code transformation. Here an AD tool, (or preprocessor), rewrites our function that we wish to 
+compute the derivative of. A preprocessor then applies the differentiation rules as prescribed by the elementary operators and chain rules, 
+and returns the augmented source function which now includes statements for computing the derivatives. The resulting source
+code can be compiled and executed as usual. There are few examples of such implementations. 
+For example has Tangent\cite{DBLP:journals/corr/abs-1711-02712} implemented AD support for a subset of the Python language, 
+while Tapenade has AD tools for transforming C and Fortran functions. The major downsides of source code transformation is that 
+they can only use information available at compile time and developing the tools is non-trivial and requires a lot of effort. 
+	
+\subsubsection*{Operator overloading}
+Operator overloading (OO) is far more common and simpler to implement.
+Forward-mode OO is usually implemented using \emph{dual numbers}, which extends the real numbers 
+of the programming language by a differential component. The real number operators are then lifted to
+operate on the dual number. Hence can implementations usually be seen as an embedded DSL in form of a library within a 
+more general host language. These DSL can then leverage the constructs and features of the host and can be imported
+as any other library. This ensures a flexible and portable advantage to embedded DSL. Examples of such DSL libraries are 
+\texttt{Julia ForwardDiff}\cite{RevelsLubinPapamarkou2016} and \texttt{Stan}\cite{DBLP:journals/corr/CarpenterHBLLB15}. 
+
+
+
+\subsubsection{Example}
+\subsubsection{Problems}
+\subsubsection{Sparsity}
 This section is based on Julia's approach to sparse AD computation. 
 Link: \url{https://github.com/JuliaDiffEq/SparseDiffTools.jl}. 
 
@@ -62,13 +123,13 @@ Below is a function which performs a 1D-convolution on the input array $x$ of di
 The Jacobian of such a function is the tri-diagonal matrix shown in Figure \ref{fig:tridiag}. 
 \begin{minted}{C}
 int* f (int* x, int n) {
-  retval = malloc(sizeof(int) * n);
-  for (int i = 1; i < n - 1; i++) {
-    retval[i] = x[i-1] + x[i] + x[i+1];
-  }
-  retval[0] = x[0] + x[1];
-  retval[n-1] = x[n-1] + x[n-2];
-  return retval;
+retval = malloc(sizeof(int) * n);
+for (int i = 1; i < n - 1; i++) {
+retval[i] = x[i-1] + x[i] + x[i+1];
+}
+retval[0] = x[0] + x[1];
+retval[n-1] = x[n-1] + x[n-2];
+return retval;
 }
 \end{minted}
 \begin{figure}[H]
@@ -112,26 +173,58 @@ with three colours as each output value depends on at most three input values.
 A colour vector for $n=5$ could then be $\lbrack c_0, c_1, c_2, c_1, c_0\rbrack$ where input values with the 
 same colour can be computed during the same forward-sweep, so we reduce the number of 
 forward calls to the number of colours used. Worth noting is that \texttt{f}'s colour vector 
- \emph{always}  contains 3 colours; independent of $n$ so the number of forward calls 
- is effectively reduced by  $n-3 + 1$ in this case. (Plus one since we need to compute the colour vector)\newline 
- For finding the colour-vector we can perform a forward sweep of the function 
- with some random input and use some underlying data-structure to solve the graph-colouring problem. 
- Alternatively can one let the user provide the color vector. 
- 
- \subsubsection{Bundle Adjustment revisited}
- For Bundle Adjustment we can also use the same approach by seeding the forward sweep 
- with the camera and point data. Using the data it's possible to figure out the dependencies and generate a 
- coloring, which in this case would be a matrix, one for each data-row. 
- In stochastic gradient descent methods, like used Bundle Adjustment, this color vector can provide a speed-up on subsequent 
- computations of the Jacobian. 
- However if the data is only used once, this approach requires that we compute the coloring again and again
- and hence would not be very efficient. 
+\emph{always}  contains 3 colours; independent of $n$ so the number of forward calls 
+is effectively reduced by  $n-3 + 1$ in this case. (Plus one since we need to compute the colour vector)\newline 
+For finding the colour-vector we can perform a forward sweep of the function 
+with some random input and use some underlying data-structure to solve the graph-colouring problem. 
+Alternatively can one let the user provide the color vector. 
+
+\subsubsection{Bundle Adjustment revisited}
+For Bundle Adjustment we can also use the same approach by seeding the forward sweep 
+with the camera and point data. Using the data it's possible to figure out the dependencies and generate a 
+coloring, which in this case would be a matrix, one for each data-row. 
+In stochastic gradient descent methods, like used Bundle Adjustment, this color vector can provide a speed-up on subsequent 
+computations of the Jacobian. 
+However if the data is only used once, this approach requires that we compute the coloring again and again
+and hence would not be very efficient. 
 
 
 
 \subsection{Sparsity w.r.t. Memory}
 Julia and STAN uses a sparse data structures but to my knowledge not feasible in Futhark?
 Need more time to look into this. 
+
+
+\section{Implementations}
+\subsection{Optimizations}
+\subsection{Motivation}
+
+
+%
+%  \section{Overview}
+%  \begin{table}[H]
+%    \centering
+%    \begin{tabular}{l|lll}
+%      \textbf{Langauge}  & Name & Mode & Implementation  \\ \hline
+%      Julia                & JuliaDiff\footnote{https://www.juliadiff.org/} &  F/R  & OO \\
+%      Swift (TensorFlow?)  & &     & \\
+%      Tensorflow           & Tensorflow   & R  & OO \\
+%      STAN                 &   &  & OO \\
+%    \end{tabular}
+%    \caption{Overview of languages}
+%    \label{tab:overview}
+%  \end{table}
+%
+%\subsection{Julia}
+%In forwardDiff it uses extended dual numbers for higher order dimensions 
+%
+%
+%
+%\subsection{Tensorflow}
+%
+%Reverse-mode using gradient tape
+
+
 
 
 \newpage

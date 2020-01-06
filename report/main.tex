@@ -7,22 +7,64 @@
 		\includegraphics[width=\textwidth]{KuLogo.png}
 		\par\vspace{1cm}
 		\vspace{1cm}
-		{\scshape\Large Title \\
+		{\scshape\Large Automatic Differentation \\
 			NDAK15014U\par}
 		\vspace{1.5cm}
 		{\Large\itshape Duc Minh Tran }\\
 		\vspace{0.5cm}
 		{\scshape\large cwz688 \\ \par}
 		\vfill
-		{\Large\scshape Template \par}
+		{\Large\scshape Master project \par}
 		\vfill
 		\par
 		\vfill
 		{\large \today\par}
 	\end{titlepage}
 	\newpage
-	\section{Introduction}
-	\subsection{Motivation}
+\begin{abstract}
+	Automatic diff is good
+\end{abstract}
+\section{Introduction}
+Many important problems require taking derivatives to be solved. Such problems include 
+Bundle Adjustment (BA) (cite) and XX. While finding the derivative for simple trivial functions 
+can be done by hand. This method is accurate and often the 
+fastest method when executed but it scales poorly for problems of real world relevance as 
+finding the derivatives by hand is time consuming and can be error prone.  We hence seek to 
+automate the process of finding these derivatives. \newline 
+
+The simplest method to implement is \textit{numerical differentiation} methods 
+but is slow in execution as it requires two evaluations per scalar derivative. 
+It also suffers from numerical imprecision. A more precise method is 
+\textit{symbolic differentiation}, which are often used in  ''mathematical'' languages
+like Matlab, Mathematica or on your old TI-89.  This generates exact symbolic derivates, but 
+is memory intensive and slow to compute. It can also not handle 
+complex logic such as unbounded loops and hence is not appropriate for general computer programs. 
+For solving most of these issues we turn to \textit{automatic differentiation}, which can 
+compute exact derivatives for an arbitrary computer program. The caveat is however 
+that the implementation must be carefully thought out. We will in this report
+see how one can implement automatic differentiation in a way that minimizes 
+the computational ....
+
+
+
+\section{Automatic differentiation}
+Automatic differentiation relies on the fact every computer program, regardless of how complex it is, 
+is a sequence of arithmetic operations, like addition, multiplication etc. There exist 
+two AD modes, which are forward- and reverse-mode. We'll mainly focus on forward-mode in this report. 
+
+\subsection{Forward-mode}
+Introduction to derivatives
+\subsubsection{Example}
+\subsubsection{Problems}
+
+While we'll focus on forward-mode AD in this report it's worth noting 
+that both reverse-mode and forward-mode has it's use cases. In algorithms such
+as backpropagation is the clear choice reverse-mode AD due to it's superior
+efficiency. 
+
+\section{Implementations}
+\subsection{Optimizations}
+\subsection{Motivation}
 
 
   \section{Overview}

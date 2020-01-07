@@ -1,9 +1,14 @@
 \input{config}
 \usepackage{amsthm}
 \usepackage{xcolor}
+ 
 
 \theoremstyle{definition}
 \newtheorem{definition}{Definition}[section]
+\newtheorem{problem}{Problem}[section]
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{corollary}{Corollary}[theorem]
+\newtheorem{lemma}[theorem]{Lemma}
 \usepackage{hyperref}
 \addbibresource{main.bib}
 \author{Minh}
@@ -129,9 +134,13 @@ As an example consider the sparse Jacobian for a function $f: \mathbf{R}^n \to  
 	\end{matrix}\right) $$
 	\caption{Jacobian from \texttt{f} for $m=n=5$}
 \end{figure}
-However it's possible in this case to exploit the sparsity to reduce the number of forward passes down to three. Consider a subset of the columns of the Jacobian such that no two columns have a non-zero in a common row. Such a subset of columns are said to be \emph{structurally orthogonal}. Formulated differently, is every pair of columns in such a subset pairwise independent of the numerical values of non-zeros. In the example above are columns 1 and 3 structurally orthogonal, as well as columns 1 and 4; and 3 and 5. By finding the minimum number of structurally orthogonal subsets we are able to reduce the number of forward passes. 
-We can now formulate our problem as:
-Given the sparsity structure of a Jacobian, partition the columns into the fewest groups of structurally orthogonal columns. For example if we partition the Jacobian above into 3 subsets $\{\{1,4\}, \{2\}, \{3,5\}\}$ we are able to compute the compressed Jacobian with just 3 passes. Without loss of information our compressed Jacobian will look like: 
+However it's possible in this case to exploit the sparsity to reduce the number of forward passes down to three. Consider a subset of the columns of the Jacobian such that no two columns have a non-zero in a common row. Such a subset of columns are said to be \emph{structurally orthogonal}. Formulated differently, is every pair of columns in such a subset, pairwise orthogonal to each other independent of the numerical values of the non-zeros. In the example above are columns 1 and 3 structurally orthogonal, as well as columns 1 and 4; and 3 and 5. By finding the minimum number of structurally orthogonal subsets we are able to reduce the number of forward passes. 
+The problem can be formulated as:
+\begin{problem}
+	Given the sparsity structure of an $m \times n$ matrix A, find a structurally orthogonal partition of its columns that has the fewest groups.
+	\label{prob:p1}
+\end{problem}
+For example if we partition the Jacobian above into 3 subsets $\{\{1,4\}, \{2\}, \{3,5\}\}$ we are able to compute the compressed Jacobian with just 3 passes. Without loss of information our compressed Jacobian will look like: 
 \begin{figure}[H]
 		$$ \left(\begin{matrix}
 	{\color{blue} j_{11}} & {\color{red} j_{12}} & {\color{green} 0 }        &  {\color{blue} 0 }       & {\color{green} j_{15}} \\
@@ -147,21 +156,106 @@ Given the sparsity structure of a Jacobian, partition the columns into the fewes
 	{\color{blue} j_{51}} & {\color{red} 0} & {\color{green} j_{55}} &  
 	\end{matrix}\right) $$
 	\caption{Compressed Jacobian from \texttt{f} for $m=n=5$ with partitioning $\{\{1,4\}, \{2\}, \{3,5\}\}$}
+	\label{fig:Jacob_partition}
 \end{figure}
+In practice it means that we've reduced the size of the Jacobian from $5 \times 5$ to $3 \times 3$ and in this case it's clear that it's the minimum size that we can reduce to. Finding such an optimal partitioning can be done
+by modelling the problem as a graph colouring problem.  Unfortunately is 
+the general graph-colouring problem known to be NP-hard, so algorithms presented here are based on effective heuristics. Next section presents simple algorithms for matrix partitioning of Jacobian. For a more thorough presentation it is refereed to \cite{Jacobian}, which also presents algorithms for 
+partitioning Hessians and much more. The next section shows how we can formulate Problem \ref{prob:p1} as a 
+Graph Colouring problem and presents algorithms for unidirectional\footnote{Here unidirectional means only partitioning over columns, unlike bidirectional which is partitioning over rows and column} matrix partitioning of Jacobian matrices. 
 
 
-\subsection{Algorithms for partitioning}
-\begin{itemize}
-	\item Graph colouring 
-	\item Variations only focus on Jacobian
-	\item
-\end{itemize}
+\subsection{Graph Colouring for matrix partitioning}
+In the following I assume that the reader is familiar with basic graph theory terminology. 
+Here we only present the most essential definitions used in the algorithm presented below for matrix partitioning.
+
+\subsubsection*{Distance-k Graph Colouring}
+\begin{definition}
+A \textit{distance-k} vertex colouring of a graph $G = (V,E)$ is a mapping $\phi : V \to \{1,2,...p\}$ such that $\phi(u) \not= \phi(v)$ whenever vertices $u$ and $v$ are distance-$k$ neighbours. The least possible number of colours required to colour $G$ is called the chromatic number of $G$ and is denoted $\chi_k(G)$. Furthermore is a distance-$k$ colouring of $G = (V,E)$ called \emph{partial} if it only covers a proper subset $W \subset V$ of the vertices. We then have that $\phi: W \to \{1,2, \cdots, p\}$ is a mapping such that  $\phi(u) \not= \phi(v)$ whenever vertices $u, v \in W$ are distance-$k$ neighbours in $G$.  
+\end{definition}
+
+\subsubsection*{The power of a Graph}
+\begin{definition}
+The \emph{k}th power of a graph $G$ is the graph $G^k$ whose vertex set is the same as that of $G$ and whose edge set consists of pairs of vertices $(u,v)$ whenever vertices $u$ and $v$ are distance-$k$ neighbours in G. 
+This leads us to the important lemma, which we state without proof:
+\end{definition}
+\begin{lemma}
+A mapping $\phi : V \to \{1,2,..., p\}$ is a distance-$k$ coloring of $G$ if and only if it is a distance-1 colouring of $G^k$
+\end{lemma}
+
+\subsubsection*{Representing Matrices Using Graphs}
+Here's we will present different graph presentations of the 
+sparsity structure of matrices. We'll use the notation for a 
+matrix $A$, we'll denote the $i$th row as $r_i$ and the $j$th column
+as $c_j$. Finally is the $(i,j)$ entry of A denoted as $a_{ij}$. We now show how we can
+construct a bipartite graph representation from a matrix $A$. \newline 
+\textbf{Bipartite Graphs}: Let $A$ be an $m \times n$ matrix with rows $r_1, r_2, \dots, r_m$ and columns $c_1, c_2, \dots, c_n$. The bipartite graph of $A$, denoted $G_b(A)$, is defined as $G_b(A) = (V_1, V_2, E)$, where $V_1 = \{r_1, r_2, ..., r_m\}$, $V_2 = \{a_1, a_2, ..., a_n\}$ and $(r_i, a_j) \in E$ whenever $a_{ij}$ is non-zero for $1 \leq i \leq m, 1 \leq j \leq n$.  An example of the bipartite representation is shown in Figure \ref{fig:bipartite}. 
+\begin{figure}[H]
+	\centering
+	\begin{subfigure}{0.45\linewidth}
+	$$ \left(\begin{matrix}
+{\color{blue} a_{11}} & {\color{red} a_{12}} & {\color{green} 0 }        &  {\color{blue} 0 }       & {\color{green} a_{15}} \\
+{\color{blue} 0}        & {\color{red} 0 }       & {\color{green} a_{23}}  &  {\color{blue} 0 }      & {\color{green} 0} \\
+{\color{blue} 0}        & {\color{red} a_{32}} &  {\color{green} a_{33}}  & {\color{blue} a_{34}} & {\color{green} 0 } \\
+{\color{blue} a_{41}} & {\color{red} 0 }       & {\color{green} 0 }         & {\color{blue} 0 }        & {\color{green} 0} \\
+{\color{blue} 0 }       & {\color{red} 0 }       & {\color{green} 0 }         & {\color{blue} a_{54}} & {\color{green} a_{55} }
+\end{matrix}\right) $$
+
+	\end{subfigure}
+	 $\Rightarrow$ \hfill 
+	\begin{subfigure}{0.45\linewidth}
+	\includegraphics[width=0.5\textwidth]{pics/bipartite.png} 
+	\end{subfigure}
+     \caption{Example of a bipartite representation of the matrix partitioning from Figure \ref{fig:Jacob_partition}}
+	\label{fig:bipartite}
+\end{figure}
+Note that the size of graph is proportional to size of an $m \times n$ matrix A, i.e. we have $\vert V_1 \vert  + \vert V_2 \vert = m + n$ vertices and $\vert E \vert = nnz(A)$, where $nnz(A)$ denotes the number of non-zero entries of $A$. Having set our preliminaries we are now able to express Problem
+\ref{prob:p1} as a Graph Colouring Problem. We make us of the following theorem:
+\begin{theorem}
+	Let $A$ be an $m \times n$ matrix and $G_b(A) = (V_1, V_2, E)$ be its bipartite graph representation. A mapping $\phi$ is a partial distance-2 coloring of $G_b(A)$ on $V_2$ if and only if $\phi$ induces a structurally orthogonal partition of the column of A. 
+	\label{th:th1}
+\end{theorem}
+From Theorem \ref{th:th1} we are now able to formulate the equivalent graph colouring problem from Problem \ref{prob:p1}:
+\begin{problem}
+	Given the bipartite graph $G_b(A) = (V_1, V_2, E)$ representing the sparsity structure of an $m \times n$ matrix $A$, find a partial distance-2 colouring of $G_b(A)$ on $V_2$ that uses the fewest colours. 
+\end{problem} 
+\subsubsection{A greedy distance-2 Colouring Algorithm}
+An algorithm for finding a greedy distance is shown in Algorithm \ref{alg:greedy2}.\newline 
+\begin{algorithm}[H]
+	\SetAlgoLined
+	\KwIn{$G_b = (V_1, V_2, E)$ }
+	\KwResult{A partitioning of the co}
+	Let $v_1, v_2, ..., v_{\vert V_2 \vert}$ be a given ordering of $V_2$\;
+	Initialize \texttt{forbiddenColours} with some some value $a \not\in V_2$\;
+	\For{$i \leftarrow 1$ \texttt{to} $\vert V_2 \vert$}
+	{
+		\ForEach{$w \in N_1(v_i)$}
+		{
+			\ForEach{\texttt{coloured vertex} $x \in N_1(w)$}
+			{
+				\texttt{forbiddenColours}$\lbrack \texttt{color} \lbrack x \rbrack \rbrack \leftarrow v_i$
+    		}
+	    }  
+        \texttt{colour}$\lbrack v_i \rbrack$ $\leftarrow \min \{ c > 0 : \texttt{forbiddenColours}\lbrack c \rbrack \not= v_i \}$
+    }	
+	\caption{A greedy partial distance-2 colouring algorithm}
+	\label{alg:greedy2}
+\end{algorithm}
+
+
+
+
+\subsection{Implementation}
+
+
+
+
+\newpage 
+\section{Legacy stuff}
+\subsection{Example: Data-independent sparsity}
 
 This section is based on Julia's approach to sparse AD computation. 
 Link: \url{https://github.com/JuliaDiffEq/SparseDiffTools.jl}. 
-
-
-\subsection{Example: Data-independent sparsity}
 
 Below is a function which performs a 1D-convolution on the input array $x$ of dimension $n$. 
 The Jacobian of such a function is the tri-diagonal matrix shown in Figure \ref{fig:tridiag}. 
@@ -189,8 +283,7 @@ return retval;
 \end{figure}
 The sparsity of the Jacobian in this case is independent of the data, e.g. $x_1$ will always be independent of $f_5$ 
 or more generally the off tri-diagonal elements will always be zero. 
-Of course the case where the input value is zero, e.g. $x_1 = 0$  the entry $\frac{\partial f_1}{\partial x_1}$ will also be zero, 
-which would then be \emph{data} dependent.
+Of course the case where the input value is zero, e.g. $x_1 = 0$  the entry $\frac{\partial f_1}{\partial x_1}$ will also be zero, which would then be \emph{data} dependent.
 
 \subsection{Example: Bundle Adjustment - Data-dependent}
 For a data-dependent example we use  Bundle Adjustment \footnote{Link to Wiki} as example and 

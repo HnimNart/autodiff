@@ -91,4 +91,9 @@ let main =
   let compressed_seed = compute_seed coloring
   let dual_input = map (\row -> map2 f32_dual.make_dual input row) compressed_seed
   let res = map f dual_input
-  in res |> flatten |> unzip
+
+  let compressed_J =  res |> map unzip |> unzip |> (.2)
+  let J = tabulate dim (\i ->
+                          let col = compressed_J[coloring[i]] in
+                          let g_col = G[i] in map2 (\c mask -> c * f32.i32 mask) col g_col)
+  in J

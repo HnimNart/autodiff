@@ -1,23 +1,5 @@
 import "ad"
 
-let A:[][]f32 = [[1.0, 1.0, 0.0, 1.0, 0.0, 0.0],
-                 [0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
-                 [0.0, 1.0, 0.0, 0.0, 1.0, 1.0],
-                 [1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                 [0.0, 0.0, 0.0, 1.0, 1.0, 0.0]]
-
-
-
-let T:[][]f32 = [[1.000000f32, 1.000000f32, 0.000000f32, 0.000000f32, 0.000000f32],
-                 [1.000000f32, 1.000000f32, 1.000000f32, 0.000000f32, 0.000000f32],
-                 [0.000000f32, 1.000000f32, 1.000000f32, 1.000000f32, 0.000000f32],
-                 [0.000000f32, 0.000000f32, 1.000000f32, 1.000000f32, 1.000000f32],
-                 [0.000000f32, 0.000000f32, 0.000000f32, 1.000000f32, 1.000000f32]]
-
-
-let matrix_to_bipartite [m][n] (A:[m][n]f32) : [m][n]i32 =
-  tabulate_2d m n (\i j -> if f32.abs A[i,j] < 0.000001 then 0 else 1)
-
 let argmin [n] (v_i:i32) (X:[n]i32) : i32 =
   if n < 1
   then
@@ -29,11 +11,21 @@ let argmin [n] (v_i:i32) (X:[n]i32) : i32 =
 
 let min (x1:i32) (x2:i32) = if x1 < x2 then x1 else x2
 
-let max_colors:i32 = 10
+-- Finds the maximum in  list of xs
+-- assummes xs are positive
+let maximum [n] (xs:[n]i32): i32 =
+  reduce (\x1 x2 -> if x1 < x2 then x2 else x1) (-1) xs
+
+
 -- G represents an adjency matrix of a bipartite graph G = (V_1, V_2, E)
--- where vertexes of V_1 is rows and
--- vertex of V_2 are the columns
--- There is an edge if element (i,j) is 1
+-- where vertexes of V_1 is rows and vertex of V_2 are the columns
+-- There is an edge if element G(i,j) is 1
+let matrix_to_bipartite [m][n] (A:[m][n]f32) : [m][n]i32 =
+  tabulate_2d m n (\i j -> if f32.abs A[i,j] < 0.000001 then 0 else 1)
+
+let max_colors:i32 = 10
+
+-- Ditance-2 graph colouring of bipartite graph  G = (V_1, V_2, E) over V_2
 -- Implementation is sequential in each coloring
 let greedy_distance_2_coloring [m][n] (G:[m][n]i32) =
   let coloring = replicate n 0
@@ -56,7 +48,6 @@ let greedy_distance_2_coloring [m][n] (G:[m][n]i32) =
 
 module f32_dual = mk_dual f32
 
-
 let f xs =
   let n = length xs
   in map (\i -> if i == 0 then f32_dual.(xs[0] + xs[1])
@@ -71,9 +62,6 @@ let f xs =
                      in f32_dual.(x1 + x2 + x3)) (iota (n))
 
 
-let maximum [n] (xs:[n]i32): i32 =
-  reduce (\x1 x2 -> if x1 < x2 then x2 else x1) (-1) xs
-
 let compute_seed_matrix [n] (coloring:[n]i32) :[][]f32 =
   let max_col = maximum coloring
   in tabulate max_col (\i -> map (\c -> if c == i then 1 else 0) coloring)
@@ -83,14 +71,16 @@ let compute_seed_matrix [n] (coloring:[n]i32) :[][]f32 =
 -- 2. Apply coloring on Jacobian
 let main =
   let dim = 5
-  let input = tabulate dim (\i -> f32.i32 i)
-  let dual_input = tabulate dim (\i -> map2 f32_dual.make_dual input (tabulate dim (\j -> f32.bool(j==i))))
+  let input = tabulate dim (\i -> f32.i32 i) -- some random input
+  let dual_input = tabulate dim (\i -> map2 f32_dual.make_dual input
+                                            (tabulate dim (\j -> f32.bool(j==i))))
   let res = map f dual_input
   let jacobian = map (map (.2)) res
   let G = matrix_to_bipartite jacobian
   let coloring = greedy_distance_2_coloring G
   let compressed_seed = compute_seed_matrix coloring
-  let dual_input = map (\row -> map2 f32_dual.make_dual input row) compressed_seed
+  let dual_input = map (\row ->
+                          map2 f32_dual.make_dual input row) compressed_seed
   let res = map f dual_input
 
   let compressed_J =  res |> map unzip |> unzip |> (.2)

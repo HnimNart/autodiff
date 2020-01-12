@@ -20,17 +20,17 @@ let maximum [n] (xs:[n]i32): i32 =
 -- G represents an adjency matrix of a bipartite graph G = (V_1, V_2, E)
 -- where vertexes of V_1 is rows and vertex of V_2 are the columns
 -- There is an edge if element G(i,j) is 1
-let matrix_to_bipartite [m][n] (A:[m][n]f32) : [m][n]i32 =
-  tabulate_2d m n (\i j -> if f32.abs A[i,j] < 0.000001 then 0 else 1)
+type bipartite_graph [m][n] = [m][n]i32
+let matrix_to_bipartite [m][n] (A:[m][n]f32) : bipartite_graph [m][n] =
+  tabulate_2d m n (\i j -> if f32.abs A[i,j] > 0.0 then 1 else 0)
 
-let max_colors:i32 = 10
 
 -- Ditance-2 graph colouring of bipartite graph  G = (V_1, V_2, E) over V_2
 -- Implementation is sequential in each coloring
-let greedy_distance_2_coloring [m][n] (G:[m][n]i32) =
+let greedy_distance_2_coloring [m][n] (max_num_colors:i32) (G:[m][n]i32) =
   let coloring = replicate n 0
   let colored = replicate (n*m) (false) -- to keep track of Neighbors that has been coloured
-  let forbiddenColors = replicate (min max_colors n) (n+1)
+  let forbiddenColors = replicate (min max_num_colors n) (n+1)
   let (coloring, _, _) =
     loop (coloring, forbiddenColors, colored) for j < n do
     let N_v_index = filter (>=0) <| tabulate m (\i -> if G[i,j] == 1 then i else (-1))  --- Neighbors of v_i, i.e. w's
@@ -62,29 +62,30 @@ let f xs =
                      in f32_dual.(x1 + x2 + x3)) (iota (n))
 
 
+-- Computes a seed matrix given coloring
 let compute_seed_matrix [n] (coloring:[n]i32) :[][]f32 =
-  let max_col = maximum coloring
+  let max_col = (maximum coloring) + 1
   in tabulate max_col (\i -> map (\c -> if c == i then 1 else 0) coloring)
 
+-- Maximum number of colours to use
+let max_num_colors:i32 = 10
+-- input dimension
+let dim = 5
 
 -- 1. Convert into bipartite graph
 -- 2. Apply coloring on Jacobian
 let main =
-  let dim = 5
-  let input = tabulate dim (\i -> f32.i32 i) -- some random input
-  let dual_input = tabulate dim (\i -> map2 f32_dual.make_dual input
+  let input:[]f32 = tabulate dim (\i -> f32.i32 i) -- some random input
+  let dual_input:[][]f32_dual.t = tabulate dim (\i -> map2 f32_dual.make_dual input
                                             (tabulate dim (\j -> f32.bool(j==i))))
-  let res = map f dual_input
-  let jacobian = map (map (.2)) res
-  let G = matrix_to_bipartite jacobian
-  let coloring = greedy_distance_2_coloring G
-  let compressed_seed = compute_seed_matrix coloring
-  let dual_input = map (\row ->
+  let jacobian:[][]f32 = map (map (.2)) <| map f dual_input
+  let G:bipartite_graph[dim][dim] = matrix_to_bipartite jacobian
+  let coloring:[]i32 = greedy_distance_2_coloring max_num_colors G
+  let compressed_seed:[3][dim]f32 = compute_seed_matrix coloring
+  let dual_input' = map (\row ->
                           map2 f32_dual.make_dual input row) compressed_seed
-  let res = map f dual_input
-
-  let compressed_J =  res |> map unzip |> unzip |> (.2)
-  let J = tabulate dim (\i -> -- restore uncompressed Jacobian
+  let compressed_J:[][]f32 = map (map (.2)) <| map f dual_input'
+  let jacobian' = tabulate dim (\i -> -- restore uncompressed Jacobian
                           let col = compressed_J[coloring[i]] in
                           let g_col = G[i] in map2 (\c mask -> c * f32.i32 mask) col g_col)
-  in J
+  in jacobian'

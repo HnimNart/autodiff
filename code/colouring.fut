@@ -72,7 +72,8 @@ let max_num_colors:i32 = 10
 -- input dimension
 let dim = 5
 
--- 1. Convert into bipartite graph
+-- 0. Get Jacobian first
+-- 1. Convert into bipartite graph and get colouring
 -- 2. Apply coloring on Jacobian
 let main =
   let input:[]f32 = tabulate dim (\i -> f32.i32 i) -- some random input

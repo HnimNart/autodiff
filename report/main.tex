@@ -18,18 +18,18 @@
 		\includegraphics[width=\textwidth]{KuLogo.png}
 		\par\vspace{1cm}
 		\vspace{1cm}
-		
+
 		{\scshape\Large Automatic Differentiation \\
 			\par}
-		
+
 		\vspace{1.5cm}
 		{\Large\itshape  Minh Duc Tran }\\
 		\vspace{0.5cm}
 		{\scshape\large cwz688 \\ \par}
 		\vfill
-		
+
 		{\Large\scshape Master project \par}
-		
+
 		\vfill
 		\par
 		\vfill
@@ -37,162 +37,183 @@
 	\end{titlepage}
 	\newpage
 	\tableofcontents
-	\newpage 
-	\begin{abstract}
-		TODO?
-	\end{abstract}
+	\newpage
 	\section{Introduction}
-	Many important problems require taking derivatives to be solved. Such problems
-	include Bundle Adjustment (BA) (cite) and XX. Finding the derivative for simple
-	trivial functions can be done by hand. This method is accurate and often the 
-	fastest method when executed but it scales poorly for problems of real world
-	relevance as finding the derivatives by hand is time consuming and can be error prone.  We
-	hence seek to automate the process of finding these derivatives. \newline 
-	
-	The simplest method to implement is \textit{numerical differentiation} methods 
-	but is slow in execution as it requires two evaluations per scalar derivative. 
-	It also suffers from numerical imprecision. A more precise method is 
+	Many important algorithms require taking derivatives to be solved. Such algorithms
+	include Bundle Adjustment\footnote{\url{https://en.wikipedia.org/wiki/Bundle_adjustment}} or training neural networks using backpropagation. 
+	These algorithms often involves finding an optimum of a function. 
+	Finding the derivative for functions can always be done by hand. 
+	While this method is accurate and often the fastest method when executed, 
+    it scales poorly as finding the derivatives by hand is time consuming and can be error prone.  We
+	hence seek to automate the process of finding these derivatives. \newline
+
+	The simplest method to implement is \textit{numerical differentiation}
+	but is slow in execution as it requires two evaluations per scalar derivative.
+	It also suffers from numerical imprecision. An exact method is
 	\textit{symbolic differentiation}, which are often used in  ''mathematical''
 	languages
-	like Matlab, Mathematica or on your old TI-89.  This generates exact symbolic
-	derivates, but 
-	is memory intensive and slow to compute. It can also not handle 
+	like Matlab, Mathematica or by your old TI-89.  This generates exact symbolic
+	derivatives, but
+	is memory intensive and slow to compute. It can also not handle
 	complex logic such as unbounded loops and hence is not appropriate for general
-	computer programs. 
+	computer programs.
 	For solving most of these issues we turn to \textit{automatic differentiation},
-	which can 
+	which can
 	compute exact derivatives for an arbitrary computer program. The caveat is
-	however 
+	however
 	that the implementation must be carefully thought out. We will in this report
-	see how one can implement automatic differentiation in a way that minimizes 
-	the computational ....
-	TODO: \textbf{To be finished}
-	\subsection{Motivation}
+	see how one can implement automatic differentiation in a way that reduces
+	the \emph{computational} cost when performing forward-mode automatic differentiation. 
+	While memory usage also can be a problem for such implementation it is not the main 
+	concern of this report. \newline
 	
 	
+	 
+	Before we dive into the optimizations, the next section first provides a general introduction to 
+	automatic differentiation. After that we introduce the optimizations which is 
+	based on matrix partitioning using graph colouring techniques. A small implementation
+	in Futhark is then shown for a simple example to see how simple one can use the shown method
+	as an addition to an already implemented AD library. 
+	
+
+
 	\section{Automatic differentiation}
 	Automatic differentiation (AD) relies on the fact every computer program,
-	regardless of how complex it is, 
+	regardless of how complex it is,
 	is a composition of arithmetic operations, like addition, multiplication etc.
-	with well-defined derivatives. 
+	with well-defined derivatives.
 	Along with the chain rule one can compute the derivative for any differentiable
-	function written as a computer program.  
+	function written as a computer program.
 	For example consider the composition of $n$ scalar functions:
-	$f(x) = f^n \circ f^{n-1} \circ \cdots \circ f^1 \circ x$. The chain rule 
-	then simply states that the derivate of 
-	$f$ w.r.t. $x$ is 
+	$f(x) = f^n \circ f^{n-1} \circ \cdots \circ f^1 \circ x$. The chain rule
+	then simply states that the derivate of
+	$f$ w.r.t. $x$ is
 	\begin{equation}
 	\frac{\partial f}{\partial x} = \frac{f^L}{f^{L-1}} \frac{f^{L-1}}{f^{L-2}}
 	\cdots \frac{f^1}{x}
 	\label{eq:f}
 	\end{equation}
 	By formulating our function $f(x)$ as a program we are able to use AD to compute
-	$\frac{\partial f}{\partial x}$ automatically. 
-	AD implementations usually has two distinct modes, forward- and reverse-mode.
+	$\frac{\partial f}{\partial x}$ automatically.
+	AD implementations usually comes in two distinct modes, forward- and reverse-mode.
 	The main difference between these two is in which direction the terms of each
 	partial derivatives of the chain rule
 	are computed. For example in Eq. \ref{eq:f} forward-mode starts from the right
 	most term, i.e. it first computes $\frac{f^1}{x}$
 	and traverses to the left. On the other hand does reverse-mode start from
-	$\frac{f^L}{f^{L-1}}$ and accumulate to the right. \newline 
-	The formulating above is oversimplified for most AD problems and we in the
-	general case 
-	have a multi-dimensional function $f : \mathbb{R}^n \to \mathbb{R}^m$  which
+	$\frac{f^L}{f^{L-1}}$ and accumulate to the right. \newline
+	The formulating above is a bit simplified for most problems and in the
+	general case have a multi-dimensional function $f:\mathbb{R}^n \to \mathbb{R}^m$  which
 	would then have the more general $m\times n$ derivative called the Jacobian matrix $J_f$ defined by:
 	\begin{figure}[H]
 		$$ J_{f} = \left(\begin{matrix}
 		\frac{\partial f_1}{\partial x_1} & \cdots & \frac{\partial f_1}{\partial x_n}
 		\\
 		\vdots & \ddots & \vdots \\
-		\frac{\partial f_m}{\partial x_1} & \cdots  &  \frac{\partial f_3}{\partial
+		\frac{\partial f_m}{\partial x_1} & \cdots  &  \frac{\partial f_m}{\partial
 			x_n}\\
 		\end{matrix}\right) $$
 		\caption{$m\times n$ Jacobian matrix of layout $f : \mathbb{R}^n \to
 			\mathbb{R}^m$}
 	\end{figure}
-    Most problems require the computation of the Jacobian. With forward-mode we can
-    compute it by given an input vector $x \in \mathbb{R}^n$  forward-mode evaluates $f$ once and
-	computes a \emph{column} of $J_f$. Hence to compute the entire Jacobian we need to perform $n$ evaluations of $f$. 
-	Techniques for reducing the number of passes can be done by performing an
-	analysis on the columns of the 
-	Jacobian and partitioning them into as few structurally orthogonal groups as
-	possible. 
-	This will be described in more details in Section \ref{sec:partitioning}.
-	Reverse-mode works in slightly different way. Given an output space vector $y
-	\in \mathbb{R}^m$, a sweep will compute a 
-	row of $J_f$. Hence do we need to perform 1 evaluation of $f$ and $m$
-	reverse-mode sweeps.  We can now see the 
-	computational difference between the two modes. When $n \ll m$ forward-mode is
-	more efficient and vice versa for $n \gg m$. 
+    Most algorithms require the computation of the Jacobian. We first look at forward-mode.
+    Given an input vector $x \in \mathbb{R}^n$  forward-mode evaluates $f$ once and
+	computes a \emph{column} of $J_f$. Hence to compute the entire Jacobian we need 
+	to perform $n$ evaluations of $f$. This means that forward-mode scales with $\mathcal{O}(n)$
+	and hence for  large functions with many input variables, forward-mode AD can quickly become a very 
+	expensive method for computing the Jacobian. 
+	Techniques for reducing the number of evaluations can be done by performing an
+	analysis on the columns of the Jacobian and partitioning them into as few structurally orthogonal groups as
+	possible.
+	This technique will be described in more detail in Section \ref{sec:partitioning}.\newline 
+	Reverse-mode works in slightly different way. 
+	Given an output space vector $y
+	\in \mathbb{R}^m$, a reverse-sweep will compute a
+	\emph{row} of $J_f$. Hence do we need to perform 1 evaluation of $f$ and $m$
+	reverse-mode sweeps, one for each scalar value in $y$, for computing the Jacobian. 
+	Reverse-mode therefore scales linearly as $\mathcal{O}(m)$.  
+	We can now see the computational difference between the two modes. When $n \ll m$ forward-mode is
+	more efficient and vice versa for $n \gg m$.
 	Applications such as training a neural networks usually have large input
-	dimensions $n$ compared to output dimension $m$ and hence are 
-	libraries like Tensorflow\footnote{\url{https://www.tensorflow.org/}} 
-	reverse-mode based. One downside to reverse-mode is that 
+	dimensions $n$ compared to output dimension $m$ and hence are
+	libraries like Tensorflow\footnote{\url{https://www.tensorflow.org/}}
+	reverse-mode based. One downside to reverse-mode is that
 	it requires access to intermediate variables computed during the evaluation and
 	hence require more memory. As Tensorflow is a DSL for Machine Learning applications
-	it can aggregate the intermediate values into fewer objects which represents a 
+	it can aggregate the intermediate values into fewer objects which represents a
 	higher level of abstraction. For example are layers in neural network composed of
 	many multiplications, but instead of storing the intermediate value from each multiplication
-	the result is aggregated into few intermediate value. Hence will specialized reverse-mode AD 
-	be a more efficient than a general purpose reverse-mode framework, as it can leverage 
-	domain-specific structures. 
-	
-		TODO \textbf{Transition into forward-mode}
-	\subsection{Forward-mode implementations}
+	the result is aggregated into few intermediate value. Hence will specialized reverse-mode AD
+	be a more efficient than a general purpose reverse-mode framework, as it can leverage
+	domain-specific structures. For general purpose reverse-mode AD memory requirements
+	tend to explode as each intermediate variables needs to store it's numerical value until the derivative
+	has been evaluated during the reverse-sweep. 
+	For e.g. loops, this can quickly explode if not carefully implemented.  
+	Frameworks for performing efficient reverse-mode AD is an active area of research 
+	and several techniques such as retaping and checkpoints\cite{Margossian2018ARO} 
+	can be applied to reduce the peak memory usage. \newline 	
+	For forward-mode AD the memory requirement is simply twice the memory
+	requirement of the initial function\footnote{It will be clearer in the next section why this is}. 
+	Because of the simpler nature of optimizing forward-mode AD implementations with much simpler 
+	optimization techniques, we will in the remaining report focus on forward-mode. 
+
+	\subsection{Forward-mode}
+	This section describes how forward-mode can be implement and provide the optimization
+	used for reducing the computational cost. 
 	The implementation of forward-mode can be done with two strategies:
 	\subsubsection*{Source code transformation}
 	One of the oldest methods for AD is source code transformation. Here an AD tool,
-	(or preprocessor), rewrites our function that we wish to 
+	(or preprocessor), rewrites our function that we wish to
 	compute the derivative of. A preprocessor then applies the differentiation rules
-	as prescribed by the elementary operators and chain rules, 
+	as prescribed by the elementary operators and chain rules,
 	and returns the augmented source code function which now includes statements for
 	computing the derivatives. The resulting source
 	code can be compiled and executed as usual. There are few examples of such
-	implementations. 
+	implementations.
 	For example has Tangent\cite{DBLP:journals/corr/abs-1711-02712} implemented AD
-	support for a subset of the Python language, 
+	support for a subset of the Python language,
 	while Tapenade has AD tools for transforming C and Fortran functions. The major
-	downsides of source code transformation is that 
+	downsides of source code transformation is that
 	they can only use information available at compile time and developing the tools
-	is non-trivial and requires a lot of effort. 
-	Therefore do we often see that AD are implemented using operator overloading. 
-	
+	is non-trivial and requires a lot of effort.
+	Therefore do we often see that AD are implemented using operator overloading.
+
 	\subsubsection*{Operator overloading}
 	Operator overloading (OO) is far more common and simpler to implement.
 	Forward-mode OO is usually implemented using \emph{dual numbers}, which extends
-	the real numbers 
+	the real numbers
 	of the programming language by a differential component. The real number
 	operators are then lifted to
 	operate on the dual numbers and provide a powerful abstraction, where the
-	details of derivatives can 
+	details of derivatives can
 	be hidden away from the programmer. Furthermore can implementations usually be
-	an embedded DSL in form of a library 
+	an embedded DSL in form of a library
 	within a more general host language. These DSL can then leverage the constructs
 	and features of the host language and can be imported
 	as any other library. This ensures a flexible and portable advantage of having
-	such an embedded DSL. Examples of such DSL libraries are 
+	such an embedded DSL. Examples of such DSL libraries are
 	\texttt{Julia ForwardDiff}\cite{RevelsLubinPapamarkou2016} and \texttt{Stan
-		Math}\cite{DBLP:journals/corr/CarpenterHBLLB15}. 
+		Math}\cite{DBLP:journals/corr/CarpenterHBLLB15}.
 	The next section provides an example of how forward-mode AD with operator
 	overloading can be applied to a simple
-	function. 
-	
+	function.
 
-	
-	
+
+
+
 	\subsubsection*{Example}
 	Consider the  function $f:\mathbb{R}^2 \to \mathbb{R}$ defined by $f(x_1, x_2) =
 	x_1 \cdot x_2 + \sin x_1$.
 	We show how one can numerical compute the partial derivative
-	$\frac{\partial}{\partial x_1} \left( x_1 \cdot x_2 + \sin x_1 \right)$ 
+	$\frac{\partial}{\partial x_1} \left( x_1 \cdot x_2 + \sin x_1 \right)$
 	of such a function by using forward-mode AD with operator overloading. With
 	operator overloading each
 	variable $x$ is augmented with it's \emph{numerical} derivate value, which we
 	denote by a dot, i.e. for a variable $x_1$
 	we denote it's derivate value as $\dot{x}_1$. The operations that can be
-	performed on such a variable 
+	performed on such a variable
 	are now a function pair of the operation itself and it's derivative expression
-	w.r.t. it's inputs. For example for 
+	w.r.t. it's inputs. For example for
 	scalar multiplication on $x_1$ and $x_2$ the  derivative expression is $x_1
 	\cdot \dot{x}_2 + x_2 \cdot \dot{x}_1$ as we want to be able to compute the
 	derivative of either $x_1$ or $x_2$. Hence we have that a scalar value is stored
@@ -201,7 +222,7 @@
 	\dot{x}_2 + x_2 \cdot \dot{x}_1) $.
 	As the function is evaluated with forward-mode AD,  also called a forward sweep,
 	the derivatives are then automatically evaluated along and combined through the
-	chain rule. 
+	chain rule.
 	The independent variable which one wants to differentiate with respect to is
 	decided by setting a \emph{seed} for that variable.
 	For example as we want to differentiate w.r.t. $x_1$ we set $\dot{w}_1 =
@@ -209,24 +230,24 @@
 		x_2}{\partial x_2} = 0$, where we define $\dot{w}_i$ for sub-expression $i$.
 	With these seeds set; Table \ref{tab:example}  shows a symbolic forward sweep of
 	$f$ for computing $\frac{\partial}{\partial x_1} \left( x_1 \cdot x_2 + \sin x_1
-	\right)$. 
+	\right)$.
 	%Some of the derivate identities used in this example are $\frac{\partial
-	%x}{\partial x} = 1$ and $\frac{\partial \sin x}{\partial x} = \cos x$.  
+	%x}{\partial x} = 1$ and $\frac{\partial \sin x}{\partial x} = \cos x$.
 	\begin{table}[H]
-		\centering 
+		\centering
 		\begin{tabular}{l|l}
 			Operations to evaluate $f$ & Operations to evaluate the derivative          \\
-			\hline \hline 
-			$w_1 = x_1$               & $\dot{w}_1 = 1$ (seed)                            
+			\hline \hline
+			$w_1 = x_1$               & $\dot{w}_1 = 1$ (seed)
 			\\
-			$w_2 = x_2$               & $\dot{w}_2 = 0$ (seed)                            
+			$w_2 = x_2$               & $\dot{w}_2 = 0$ (seed)
 			\\
 			$w_3 = w_1 \cdot w_2$     & $\dot{w_3} = w_2 \cdot \dot{w}_1 + w_1 \cdot
 			\dot{w}_2$ \\
-			$w_4 = \sin w_1$          & $\dot{w}_4 = \cos w_1  \cdot  \dot{w}_1$          
+			$w_4 = \sin w_1$          & $\dot{w}_4 = \cos w_1  \cdot  \dot{w}_1$
 			\\
-			$w_5 = w_3 + w_4$         & $\dot{w}_5 = \dot{w}_3 + \dot{w}_4$               
-			
+			$w_5 = w_3 + w_4$         & $\dot{w}_5 = \dot{w}_3 + \dot{w}_4$
+
 		\end{tabular}
 		\caption{Example of a symbolic forward pass for forward-mode AD for computing
 			$\frac{\partial}{\partial x_1} \left( x_1 \cdot x_2 + \sin x_1 \right)$}
@@ -238,34 +259,34 @@
 	\frac{\partial f}{\partial x_1} = w_2 \cdot \dot{w}_1 + w_1 \cdot \dot{w}_2 +
 	\cos w_1  \cdot  \dot{w}_1 =  2 \cdot 1 + 1 \cdot 0 + \cos 1 \cdot 1 = 2.5403
 	\label{eq:seeds}
-	\end{equation} 
+	\end{equation}
 	Which is the result we would also have obtained through differentiation by hand.
-	
+
 	If we wanted to compute the Jacobian of $f$ we also need to compute
-	$\frac{\partial f}{\partial x_2}$  
-	and we would need to change our seeds to $\dot{w}_1 = 0$ and $\dot{w}_2 = 1$ 
-	and perform another forward sweep. 
+	$\frac{\partial f}{\partial x_2}$
+	and we would need to change our seeds to $\dot{w}_1 = 0$ and $\dot{w}_2 = 1$
+	and perform another forward sweep.
 	The reader may wonder why we can't set both seeds to 1 and settle for single
-	forward sweep. 
+	forward sweep.
 	Consider the operation $x_1 \cdot x_2$ with the two input values, $x_1$ and
 	$x_2$ with the derivative expression
 	$x_1 \cdot \dot{x}_2 + x_2 \cdot \dot{x}_1$. If we then set both seeds to 1,
-	both terms will then contribute to 
+	both terms will then contribute to
 	the partial derivative, i.e. there is interleaving, which would result in
 	neither derivatives being correct. For example in Eq. \ref{eq:seeds}
 	will the middle term now contribute to the resulting derivative for
 	$\frac{\partial f}{\partial x_1}$. Hence do we need a separate forward sweep for
 	each
-	independent variable that we wish to compute the derivative of. 
+	independent variable that we wish to compute the derivative of.
 	\subsubsection{Exploiting sparsity of the Jacobian}
 	One common problem for many applications of AD is that many elements of the
 	Jacobian
-	are zeros and as such said to be sparse. Such sparsity in the Jacobian can 
+	are zeros and as such said to be sparse. Such sparsity in the Jacobian can
 	be exploited for more efficient computations by using fewer forward passes. The
 	problem
 	of reducing the number of forward passes can be formulated as a matrix
-	partitioning problem. 
-	As an example consider the sparse Jacobian for a function $f: \mathbb{R}^n \to 
+	partitioning problem.
+	As an example consider the sparse Jacobian for a function $f: \mathbb{R}^n \to
 	\mathbb{R}^m$ with $m=n=5$ in Figure \ref{fig:jacobian}. By not exploiting the
 	sparsity of the Jacobian, forward-mode AD requires $n=5$ forward passes to
 	compute the Jacobian.
@@ -275,7 +296,7 @@
 		0 & 0 & j_{23} & 0 & 0 \\
 		0 & j_{32} & j_{33} & j_{34} & 0 \\
 		j_{41} & 0 & 0 & 0 & 0 \\
-		0 & 0 & 0 & j_{54} & j_{55} 
+		0 & 0 & 0 & j_{54} & j_{55}
 		\end{matrix}\right) $$
 		\caption{Jacobian from \texttt{f} for $m=n=5$}
 		\label{fig:jacobian}
@@ -289,7 +310,7 @@
 	non-zeros. In the example above are columns 1 and 3 structurally orthogonal, as
 	well as columns 1 and 4; and 3 and 5. By finding the minimum number of
 	structurally orthogonal subsets we are able to reduce the number of forward
-	passes. 
+	passes.
 	The problem can be formulated as:
 	\begin{problem}
 		Given the sparsity structure of an $m \times n$ matrix A, find a structurally
@@ -298,12 +319,12 @@
 	\end{problem}
 	For example if we partition the Jacobian above into 3 subsets $\{\{1,4\}, \{2\},
 	\{3,5\}\}$ we are able to compute the compressed Jacobian with just 3 passes.
-	Without loss of information our compressed Jacobian will look like: 
+	Without loss of information our compressed Jacobian will look like:
 	\begin{figure}[H]
 		$$ \left(\begin{matrix}
-		{\color{blue} j_{11}} & {\color{red} j_{12}} & {\color{green} 0 }        & 
+		{\color{blue} j_{11}} & {\color{red} j_{12}} & {\color{green} 0 }        &
 		{\color{blue} 0 }       & {\color{green} j_{15}} \\
-		{\color{blue} 0}        & {\color{red} 0 }       & {\color{green} j_{23}}  & 
+		{\color{blue} 0}        & {\color{red} 0 }       & {\color{green} j_{23}}  &
 		{\color{blue} 0 }      & {\color{green} 0} \\
 		{\color{blue} 0}        & {\color{red}j_{32}} &  {\color{green} j_{33}}  &
 		{\color{blue} j_{34}} & {\color{green} 0 } \\
@@ -316,7 +337,7 @@
 		{\color{blue} 0} & {\color{red} 0} & {\color{green} j_{23}} \\
 		{\color{blue} j_{34}} & {\color{red} j_{32}} & {\color{green} j_{33}}  \\
 		{\color{blue} j_{41}} & {\color{red} 0} & {\color{green} 0}  \\
-		{\color{blue} j_{51}} & {\color{red} 0} & {\color{green} j_{55}} &  
+		{\color{blue} j_{51}} & {\color{red} 0} & {\color{green} j_{55}} &
 		\end{matrix}\right) $$
 		\caption{Compressed Jacobian from \texttt{f} for $m$ = $n$ = $5$ with
 			partitioning $\{\{1,4\}, \{2\}, \{3,5\}\}$}
@@ -326,29 +347,29 @@
 	5$ to a compressed Jacobian of size $3 \times 3$ and in this case it's clear
 	that it's the minimum size that we can reduce to. Finding such an optimal
 	partitioning can be done
-	by modelling the problem as a graph colouring problem.  Unfortunately is 
+	by modelling the problem as a graph colouring problem.  Unfortunately is
 	the general graph-colouring problem known to be NP-hard, so algorithms presented
 	here are based on effective heuristics. Next section presents simple algorithms
 	for matrix partitioning of Jacobian. For a more thorough presentation it is
-	refereed to \cite{Jacobian}, which also presents algorithms for 
+	refereed to \cite{Jacobian}, which also presents algorithms for
 	partitioning Hessians and much more. The next section shows how we can formulate
-	Problem \ref{prob:p1} as a 
+	Problem \ref{prob:p1} as a
 	Graph Colouring problem and presents algorithms for unidirectional\footnote{Here
 		unidirectional means only partitioning over columns, unlike bidirectional which
-		is partitioning over rows and column} matrix partitioning of Jacobian matrices. 
-	
-	
+		is partitioning over rows and column} matrix partitioning of Jacobian matrices.
+
+
 	\subsection{Graph Colouring for matrix partitioning}
 	\label{sec:partitioning}
 	In the following I assume that the reader is familiar with basic graph theory
-	terminology. 
+	terminology.
 	This section's results are based on Chapter 1-3 in \cite{Jacobian} and here
 	we  only present the most essential definitions and results used in the
-	algorithm presented 
+	algorithm presented
 	below for matrix partitioning with graph colouring. The proofs of the presented
-	theorems and lemmas 
+	theorems and lemmas
 	can also be found in \cite{Jacobian} and are here omitted for brevity.
-	We start with a graph colouring definition. 
+	We start with a graph colouring definition.
 	\subsubsection*{Distance-k Graph Colouring}
 	\begin{definition}
 		A \textit{distance-k} vertex colouring of a graph $G = (V,E)$ is a mapping $\phi
@@ -357,43 +378,43 @@
 		required to colour $G$ is called the chromatic number of $G$ and is denoted
 		$\chi_k(G)$. Furthermore is a distance-$k$ colouring of $G = (V,E)$ called
 		\emph{partial} if it only covers a proper subset $W \subset V$ of the vertices.
-		We then have that $\phi: W \to \{1,2, \cdots, p\}$ is a mapping such that 
+		We then have that $\phi: W \to \{1,2, \cdots, p\}$ is a mapping such that
 		$\phi(u) \not= \phi(v)$ whenever vertices $u, v \in W$ are distance-$k$
-		neighbours in $G$.  
+		neighbours in $G$.
 	\end{definition}
-	
-	\subsubsection*{The power of a Graph}
-	\begin{definition}
-		The \emph{k}th power of a graph $G$ is the graph $G^k$ whose vertex set is the
-		same as that of $G$ and whose edge set consists of pairs of vertices $(u,v)$
-		whenever vertices $u$ and $v$ are distance-$k$ neighbours in G. 
-		This leads us to the  lemma:
-	\end{definition}
-	\begin{lemma}
-		A mapping $\phi : V \to \{1,2,..., p\}$ is a distance-$k$ coloring of $G$ if and
-		only if it is a distance-1 colouring of $G^k$
-	\end{lemma}
-	
+
+%	\subsubsection*{The power of a Graph}
+%	\begin{definition}
+%		The \emph{k}th power of a graph $G$ is the graph $G^k$ whose vertex set is the
+%		same as that of $G$ and whose edge set consists of pairs of vertices $(u,v)$
+%		whenever vertices $u$ and $v$ are distance-$k$ neighbours in G.
+%		This leads us to the  lemma:
+%	\end{definition}
+%	\begin{lemma}
+%		A mapping $\phi : V \to \{1,2,..., p\}$ is a distance-$k$ coloring of $G$ if and
+%		only if it is a distance-1 colouring of $G^k$
+%	\end{lemma}
+
 	\subsubsection*{Representing Matrices Using Graphs}
 	%Here's we will present different graph presentations of the sparsity structure
-	%of matrices. 
+	%of matrices.
 	For a matrix $A$ we'll denote the $i$th row as $r_i$ and the $j$th column
 	as $c_j$. Finally is the $(i,j)$ entry of A denoted as $a_{ij}$. We now show how
 	we can
-	construct a bipartite graph representation from a matrix $A$. \newline 
+	construct a bipartite graph representation from a matrix $A$. \newline
 	\textbf{Bipartite Graphs}: Let $A$ be an $m \times n$ matrix with rows $r_1,
 	r_2, \dots, r_m$ and columns $c_1, c_2, \dots, c_n$. The bipartite graph of $A$,
 	denoted $G_b(A)$, is defined as $G_b(A) = (V_1, V_2, E)$, where $V_1 = \{r_1,
 	r_2, ..., r_m\}$, $V_2 = \{c_1, c_2, ..., c_n\}$ and $(r_i, c_j) \in E$ whenever
 	$a_{ij}$ is non-zero for $1 \leq i \leq m, 1 \leq j \leq n$.  An example of the
-	bipartite representation is shown in Figure \ref{fig:bipartite}. 
+	bipartite representation is shown in Figure \ref{fig:bipartite}.
 	\begin{figure}[H]
 		\centering
 		\begin{subfigure}{0.45\linewidth}
 			$$ \left(\begin{matrix}
-			{\color{blue} a_{11}} & {\color{red} a_{12}} & {\color{green} 0 }        & 
+			{\color{blue} a_{11}} & {\color{red} a_{12}} & {\color{green} 0 }        &
 			{\color{blue} 0 }       & {\color{green} a_{15}} \\
-			{\color{blue} 0}        & {\color{red} 0 }       & {\color{green} a_{23}}  & 
+			{\color{blue} 0}        & {\color{red} 0 }       & {\color{green} a_{23}}  &
 			{\color{blue} 0 }      & {\color{green} 0} \\
 			{\color{blue} 0}        & {\color{red} a_{32}} &  {\color{green} a_{33}}  &
 			{\color{blue} a_{34}} & {\color{green} 0 } \\
@@ -403,9 +424,9 @@
 			{\color{blue} a_{54}} & {\color{green} a_{55} }
 			\end{matrix}\right) $$
 		\end{subfigure}
-		$\Rightarrow$ \hfill 
+		$\Rightarrow$ \hfill
 		\begin{subfigure}{0.45\linewidth}
-			\includegraphics[width=0.6\textwidth]{pics/bipartite.png} 
+			\includegraphics[width=0.6\textwidth]{pics/bipartite.png}
 		\end{subfigure}
 		\caption{Example of a bipartite representation of the matrix partitioning
 			from Figure \ref{fig:Jacob_partition}}
@@ -420,36 +441,44 @@
 		Let $A$ be an $m \times n$ matrix and $G_b(A) = (V_1, V_2, E)$ be its bipartite
 		graph representation. A mapping $\phi$ is a partial distance-2 coloring of
 		$G_b(A)$ on $V_2$ if and only if $\phi$ induces a structurally orthogonal
-		partition of the columns of A. 
+		partition of the columns of A.
 		\label{th:th1}
 	\end{theorem}
 	The reader may verify that the partitioning in Figure \ref{fig:bipartite} indeed
-	satisfies the partial distance-2 colouring of 
+	satisfies the partial distance-2 colouring of
 	it's bipartite representation. An important corollary of Theorem \ref{th:th1} is
-	
+
 	\begin{corollary}
 		Let $\chi_2(G_b, V_2)$ denote the chromatic number for a partial distance-2
-		colouring of $G_b(A) = (V_1, V_2, E)$  on $V_2$. 
+		colouring of $G_b(A) = (V_1, V_2, E)$  on $V_2$.
 		Then $\chi_2(G_b, V_2)$ is the minimum number of forward passes required to
-		compute the Jacobian and hence is a lower bound. 
+		compute the Jacobian and hence is a lower bound.
 		\label{col:minimum}
 	\end{corollary}
 	Corollary \ref{col:minimum} simply states that if we can find the minimum number
 	of colours required for a partial distance-2 colouring of $G_b(A) = (V_1, V_2,
-	E)$  on $V_2$  then we've found the optimal partition for computing the 
+	E)$  on $V_2$  then we've found the optimal partition for computing the
 	Jacobian in the fewest number of forward passes. From Theorem \ref{th:th1} we
 	are now able to formulate the equivalent graph colouring problem from Problem
 	\ref{prob:p1}:
 	\begin{problem}
 		Given the bipartite graph $G_b(A) = (V_1, V_2, E)$ representing the sparsity
 		structure of an $m \times n$ matrix $A$, find a partial distance-2 colouring of
-		$G_b(A)$ on $V_2$ that uses the fewest colours. 
-	\end{problem} 
-	TODO finish this section
-	
+		$G_b(A)$ on $V_2$ that uses the fewest colours.
+	\end{problem}
+	Having defined our problem as graph colouring problem we are 
+	now able to see how we can implement this technique. We'll first need 
+	an algorithm for computing the graph colouring. We use a simple greedy approximation
+	algorithm for this. 
+
 	\subsubsection{A greedy distance-2 Colouring Algorithm}
 	An algorithm for finding a greedy distance is shown in Algorithm
-	\ref{alg:greedy2}.\newline 
+	\ref{alg:greedy2}. The algorithm is fairly simple. It iterates through each of the vertices 
+	in $V_2$ and gives it the minimum free colouring that is not among it's 
+	neighbours. As this is an approximation algorithm it doesn't guarantee an optimal 
+	solution, but only guarantees an upper bound on the number of colours. This algorithm never uses
+	more than $d+1$ colours, where $d$ is the number of distance-2 neighbours in the graph. 
+	\newline
 	\begin{algorithm}[H]
 		\SetAlgoLined
 		\KwIn{$G_b = (V_1, V_2, E)$ }
@@ -465,32 +494,31 @@
 					\texttt{forbiddenColours}$\lbrack \texttt{color} \lbrack x \rbrack \rbrack
 					\leftarrow v_i$
 				}
-			}  
+			}
 			\texttt{colour}$\lbrack v_i \rbrack$ $\leftarrow \min \{ c > 0 :
 			\texttt{forbiddenColours}\lbrack c \rbrack \not= v_i \}$
-		}	
+		}
 		\caption{A greedy partial distance-2 colouring algorithm}
 		\label{alg:greedy2}
 	\end{algorithm}
-	
-	
-	
-	
+ 
+
+
 	\section{Implementation in Futhark}
-	To see how we can make use of the results from previous section 
+	To see how we can make use of the results from previous section
 	in Futhark we implement the colouring algorithm and show how easily
-	we can apply it to a Jacobian to reduce the number of forward-passes. 
+	we can apply it to a Jacobian to reduce the number of forward-passes.
 	Implementing graph colouring for matrix column partitioning is fairly simple. We
 	also, without any modifications, use the already implemented forward-AD library,
 	\url{https://github.com/diku-dk/futhark-ad}, which uses dual numbers and operator overloading. All the code can be found in
-	Appendix ??. 
+	Appendix ??.
 	Consider the stencil function in Listing \ref{lst:tridiag} and note that every
 	output value only depends on at most three different input values.
 \begin{listing}[H]
 \begin{minted}{haskell}
 let f xs =
   let n = length xs
-  in map  (\i -> if i == 0 then 
+  in map  (\i -> if i == 0 then
                    f32_dual.(xs[0] + xs[1])
                  else if i == n - 1 then
                    let x1 = xs[n - 2]
@@ -506,10 +534,10 @@ let f xs =
 \label{lst:tridiag}
 \end{listing}
 	The Jacobian of such a function when the input dimension is $n= 5$, is shown in
-	Figure \ref{fig:tridiag}. Observe that 
+	Figure \ref{fig:tridiag}. Observe that
 	the Jacobian is very sparse and only
 	contains elements along the
-	tri-diagonal and zeros elsewhere.  
+	tri-diagonal and zeros elsewhere.
 	\begin{figure}[H]
 		$$ J_{f} = \left(\begin{matrix}
 		\frac{\partial f_1}{\partial x_1} & \frac{\partial f_1}{\partial x_2} & 0 & 0 &
@@ -527,9 +555,9 @@ let f xs =
 		\label{fig:tridiag}
 	\end{figure}
 	For a simple implementation of forward-mode AD we'll normally use
-	$n$ forward passes to compute the Jacobian, as each forward pass computes a 
+	$n$ forward passes to compute the Jacobian, as each forward pass computes a
 	single column of the Jacobian. 	 Let $x = \lbrack x_0, x_2, x_3, x_4, x_4 \rbrack$ denote our input vector then
-	we will need to set a seed for each of the input values. With dual numbers our input for computing the Jacobian is:
+	we will need to set a seed for each of the scalar values. With dual numbers our input for computing the Jacobian is:
 		\begin{figure}[H]
 		$$ \left(\begin{matrix}
 (x_0, 1) & (x_1, 0) & (x_2, 0) & (x_3, 0) & (x_4, 0) \\
@@ -539,18 +567,18 @@ let f xs =
 (x_0, 0) & (x_1, 0) & (x_2, 0) & (x_3, 0) & (x_4, 1)
 		\end{matrix}\right) $$
 		\caption{Seeded input matrix for computing the Jacobian of Function in Listing \ref{lst:tridiag}}
-	\end{figure}	
-    Here the first input row will compute the column $\frac{\partial f}{\partial x_0}$ of the Jacobian, 
-    the second $\frac{\partial f}{\partial x_1}$ and so on. 
-	While we are able to \texttt{map} over each row in Futhark and compute everything in parallel on a GPU 
+	\end{figure}
+    Here the first input row will compute the column $\frac{\partial f}{\partial x_0}$ of the Jacobian,
+    the second  will compute $\frac{\partial f}{\partial x_1}$ and so on.
+	While we are able to \texttt{map} over each row in Futhark and compute everything in parallel on a GPU
 	most of the computations are wasted.
 	By applying the colouring techniques from previous section, we able to only use
 	$3$ forward passes
-	of the function \texttt{f} \emph{regardless} of the input dimension $n$.  
+	of the function \texttt{f} \emph{regardless} of the input dimension $n$.
 	Recall that we able to transform any $m\times n$ matrix $A$ into a bipartite
-	graph 
+	graph
 	representation by letting the row be set of vertices of $V_1$ and the columns be
-	$V_2$. 
+	$V_2$.
 	We use an adjacency matrix to represent our bipartite graph as such:
 	\begin{figure}[H]
 		$$ G_b(J_f) = \left(\begin{matrix}
@@ -566,21 +594,21 @@ let f xs =
 	\end{figure}
 	The implementation of the greedy distance-2 colouring in Futhark is shown in
 	Listing \ref{lst:greedy2}. Note that the implementation is sequential in the
-	outer-most loop, but is parallel inside the loop-body.  
+	outer-most loop, but is parallel inside the loop-body.
 	A  discussion of parallel colouring algorithms are beyond the scope of this
-	project, but should be part of the future work of this project. 
+	project, but should be part of the future work of this project.
 \begin{listing}[H]
 \begin{minted}{haskell}
 let greedy_distance_2_coloring [m][n] (max_num_colors:i32) (G:[m][n]i32) =
   let coloring = replicate n 0
-  let colored = replicate (n*m) (false) 
+  let colored = replicate (n*m) (false)
   let forbiddenColors = replicate (min max_colors n) (n+1)
   let (coloring, _, _) =
     loop (coloring, forbiddenColors, colored) for j < n do
       let N_v = filter (>=0) <| tabulate m (\i -> if G[i,j] == 1 then i else (-1))
       let colored_index_N_w = flatten <| map (\j' -> tabulate m (\i -> if unsafe colored[j' * m + i] then i else (-1))) N_v
       let colored_index_N_w = filter (>= 0) colored_index_N_w
-      let color_idx = map (\i -> coloring[i]) colored_index_N_w   
+      let color_idx = map (\i -> coloring[i]) colored_index_N_w
       let forbiddenColors' = scatter forbiddenColors color_idx (replicate (length color_idx) j)
       let idx = map (\i -> i * m + j) N_v
       let coloring[j] = argmin j forbiddenColors'
@@ -592,8 +620,11 @@ let greedy_distance_2_coloring [m][n] (max_num_colors:i32) (G:[m][n]i32) =
 \label{lst:greedy2}
 \end{listing}
 	Let $C = \lbrack c_0, c_1, c_2, c_0, c_1 \rbrack$ denote the
-	colouring of the columns obtained from the algorithm above, 
-	then we are now able to compute the  seed matrix as such. 
+	colouring of the columns obtained from the algorithm above.
+	Since each output value only depend on at most 
+	3 input values, it's fairly easy to see that this is optimal. From Corollary \ref{col:minimum}
+	we've then found the lower bound of forward passes for computing Jacobian.  
+	We are now able to compute the  seed matrix as such.
 \begin{listing}[H]
 \begin{minted}{haskell}
 let compute_seed_matrix [n] (coloring:[n]i32) :[][]f32 =
@@ -606,176 +637,222 @@ Our new seeded input matrix then becomes:
 	$$ \left(\begin{matrix}
 	(x_0, 1) & (x_1, 0) & (x_2, 0) & (x_3, 1) & (x_4, 0) \\
 	(x_0, 0) & (x_1, 1) & (x_2, 0) & (x_3, 0) & (x_4, 1) \\
-	(x_0, 0) & (x_1, 0) & (x_2, 1) & (x_3, 0) & (x_4, 0) 
+	(x_0, 0) & (x_1, 0) & (x_2, 1) & (x_3, 0) & (x_4, 0)
 	\end{matrix}\right) $$
 	\caption{Seeded input matrix for computing the Jacobian of Function in Listing \ref{lst:tridiag}}
-\end{figure}	
-Now the first input row will compute both $\frac{\partial f}{\partial x_0}$ 
-\emph{and} $\frac{\partial f}{\partial x_3}$ during the same forward-pass. 
-With the new input matrix we are now able to compute the compressed Jacobian 
+\end{figure}
+Now the first input row will compute \emph{both} $\frac{\partial f}{\partial x_0}$
+\emph{and} $\frac{\partial f}{\partial x_3}$ during the same forward-pass.
+With the new input matrix we are now able to compute the compressed Jacobian
 with only 3 forward passes. Restoring the Jacobian from the compressed one
-can be done by using the used colouring and graph to reverse the indices. 
+can be done by using the colouring and graph to reverse the indices. This example
+shows how we can reduce the computational cost of forward-mode AD without 
+modifying the existing implementation. This provides a flexible add-on 
+to the existing framework. 
 
-\subsection{Limitations of colouring}
-While the given example results in an optimal and impressive result of 
-only requiring 3 forward passes regardless of the input size 
-it's considered a special case. In the general case we might 
-run into other issues such as:
-\begin{itemize}
-	\item The presented graph colouring algorithm is an approximation algorithm. 
-	While it performs reasonable in practice it does rarely yield an optimal
-	colouring
-	\item Data dependencies
-	\item Still need to evaluate $F$ at least once fully. 
-\end{itemize}
-	
-	
+
 \section{Discussion}
-	
-	
-	
-	
+While the given example results is optimal partitioning, which results in 
+only requiring 3 forward passes regardless of the input size
+it's a special case. In the general case we might not be so lucky. 
+\subsection*{Initial cost}
+We still need to perform full pass, i.e. $n$ evaluations of $f$, to obtain the 
+initial Jacobian for creating the graph. Hence will this only be 
+worth it when the colouring optimization is used multiple times. 
+Whether the it's worth to find a colouring is obviously
+problem dependent, but as most optimization
+algorithms compute and apply the Jacobian over and over 
+this might be worth the initial cost in these cases. Algorithms that might benefit 
+include Bundle Adjustment and Backpropagation which performs the same optimization 
+over the same data set over and over again. 
+
+\subsection*{Graph Colouring algorithms (in Futhark)} 
+The presented graph colouring algorithm is an approximation algorithm.
+While it performs reasonable in practice it does not guarantee an optimal
+colouring. Question is does it perform well enough? A deeper dive into
+better (parallel) graph colouring algorithms is needed, which provides better guarantees 
+on the solution. Another concern is the efficiency of the algorithm. As
+the implemented algorithm is sequential in the input dimension for a
+sufficiently large $n$ the computational time might become too large. 
+I will leave this for future work to investigate these two issues in more depth. 
+
+
 \section{Conclusion}
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	\newpage 
-	\newpage 
-	
-	\appendix
-	\section{Legacy stuff}
-	\subsection{Example: Data-independent sparsity}
-	
-	This section is based on Julia's approach to sparse AD computation. 
-	Link: \url{https://github.com/JuliaDiffEq/SparseDiffTools.jl}. 
-	
-	Below is a function which performs a 1D-convolution on the input array $x$ of
-	dimension $n$. 
-	The Jacobian of such a function is the tri-diagonal matrix shown in Figure
-	\ref{fig:tridiag}. 
-	\begin{minted}{C}
-	int* f (int* x, int n) {
-	retval = malloc(sizeof(int) * n);
-	for (int i = 1; i < n - 1; i++) {
-	retval[i] = x[i-1] + x[i] + x[i+1];
-	}
-	retval[0] = x[0] + x[1];
-	retval[n-1] = x[n-1] + x[n-2];
-	return retval;
-	}
-	\end{minted}
-	\begin{figure}[H]
-		$$ J_{f} = \left(\begin{matrix}
-		\frac{\partial f_1}{\partial x_1} & \frac{\partial f_1}{\partial x_2} & 0 & 0 &
-		0 \\
-		\frac{\partial f_2}{\partial x_1}& \frac{\partial f_2}{\partial x_2} &
-		\frac{\partial f_2}{\partial x_3} & 0 & 0\\
-		0 & \frac{\partial f_3}{\partial x_2} & \frac{\partial f_3}{\partial x_3} &
-		\frac{\partial f_3}{\partial x_4} & 0\\
-		0 & 0 & \frac{\partial f_4}{\partial x_3} & \frac{\partial f_4}{\partial x_4} &
-		\frac{\partial f_4}{\partial x_5} \\
-		0 & 0 & 0 & \frac{\partial f_5}{\partial x_4} & \frac{\partial f_5}{\partial
-			x_5}
-		\end{matrix}\right) $$
-		\caption{Jacobian from \texttt{f} for $n=5$}
-		
-	\end{figure}
-	The sparsity of the Jacobian in this case is independent of the data, e.g. $x_1$
-	will always be independent of $f_5$ 
-	or more generally the off tri-diagonal elements will always be zero. 
-	Of course the case where the input value is zero, e.g. $x_1 = 0$  the entry
-	$\frac{\partial f_1}{\partial x_1}$ will also be zero, which would then be
-	\emph{data} dependent.
-	
-	\subsection{Example: Bundle Adjustment - Data-dependent}
-	For a data-dependent example we use  Bundle Adjustment \footnote{Link to Wiki}
-	as example and 
-	show that the layout of the Jacobian depends on how we represent our data as
-	shown in Figure
-	\ref{fig:jacobian-matrix-for-a-bundle-adjustment-problem-con-sisting-of-3-cameras-and-4-points}.
-	Note that for showing the natural sparsity of the Jacobian we have to represent
-	the input data as one long vector
-	i.e. our input data has the form $\lbrack \texttt{cam1} \ \texttt{cam2} \
-	\texttt{cam3}\ X_1\ X_2\ X_3\ X_4 \rbrack $, 
-	where only one pair of \texttt{camX} and $X_i$ are non-zero for each data-row. 
-	The Jacobian sparsity pattern hence depends on the input, for example if we swap
-	the columns \texttt{cam1} and \texttt{cam2}, keeping all else the same,
-	the sparsity pattern of the Jacobian also changes. 
-	\begin{figure}[H]
-		\centering
-		
-		%\includegraphics[width=0.7\linewidth]{../../../Desktop/Jacobian-matrix-for-a-bundle-adjustment-problem-con-sisting-of-3-cameras-and-4-points}
-		\caption{Data dependent sparse matrix stemming from Bundle Adjustment (Stolen
-			from 
-			\url{https://www.researchgate.net/figure/Jacobian-matrix-for-a-bundle-adjustment-problem-con-sisting-of-3-cameras-and-4-points_fig1_284154527})}
-		
-		\label{fig:jacobian-matrix-for-a-bundle-adjustment-problem-con-sisting-of-3-cameras-and-4-points}
-	\end{figure}
-	
-	
-	\subsection{Sparsity w.r.t. performance}
-	For Forward-mode AD we can reduce the computation of both types of sparsity with
-	a \texttt{colour} vector, 
-	which  denotes which input parameters are independent (or dependent) of each
-	other. 
-	This corresponds to solving a graph-colouring problem.
-	For example for the function \texttt{f} above we can use a color vector 
-	with three colours as each output value depends on at most three input values. 
-	A colour vector for $n=5$ could then be $\lbrack c_0, c_1, c_2, c_1, c_0\rbrack$
-	where input values with the 
-	same colour can be computed during the same forward-sweep, so we reduce the
-	number of 
-	forward calls to the number of colours used. Worth noting is that \texttt{f}'s
-	colour vector 
-	\emph{always}  contains 3 colours; independent of $n$ so the number of forward
-	calls 
-	is effectively reduced by  $n-3 + 1$ in this case. (Plus one since we need to
-	compute the colour vector)\newline 
-	For finding the colour-vector we can perform a forward sweep of the function 
-	with some random input and use some underlying data-structure to solve the
-	graph-colouring problem. 
-	Alternatively can one let the user provide the color vector. 
-	
-	\subsubsection{Bundle Adjustment revisited}
-	For Bundle Adjustment we can also use the same approach by seeding the forward
-	sweep 
-	with the camera and point data. Using the data it's possible to figure out the
-	dependencies and generate a 
-	coloring, which in this case would be a matrix, one for each data-row. 
-	In stochastic gradient descent methods, like used Bundle Adjustment, this color
-	vector can provide a speed-up on subsequent 
-	computations of the Jacobian. 
-	However if the data is only used once, this approach requires that we compute
-	the coloring again and again
-	and hence would not be very efficient. 
-	
-	
-	
-	\subsection{Sparsity w.r.t. Memory}
-	Julia and STAN uses a sparse data structures but to my knowledge not feasible in
-	Futhark?
-	Need more time to look into this. 
-	
+
+%
+%%\subsection*{Data dependent Sparsity}
+%%Consider the stencil function from Listing \ref{lst:tridiag}.
+%%	The sparsity of the Jacobian in this case is independent of the data, e.g. $x_1$
+%%	will always be independent of $f_5$	or more generally the off 
+%%	tri-diagonal elements will always be zero.\newline 
+%%As we use the resulting Jacobian from an initial forward pass, 
+%%and use zero entries as an indication of 
+%%columns being structurally orthogonal we might have a zero-entry at $a_{ij}$ because
+%%of the data that was given during the initial forward pass. If we compute the initial 
+%%Jacobian with some zero data 
+%	
+%	
+%%	However does optimization problems use data. Such data 
+%%	can induce a sparsity-pattern. 
+%%	For a data-dependent example we use  Bundle Adjustment\footnote{\url{https://en.wikipedia.org/wiki/Bundle_adjustment}}
+%%	as an example and
+%%	show that the layout of the Jacobian depends on how we represent our data as
+%%	shown in Figure
+%%	\ref{fig:jacobian-matrix-for-a-bundle-adjustment-problem-con-sisting-of-3-cameras-and-4-points}.
+%%	Bundle Adjustment (BA) is a classic problem in Computer Vision, in which from a set of cameras, 
+%%	where images have been taken and selecting a fixed set of 2D points in the images,  
+%%	is to recreate the scene in 3D. This is done by adjusting the camera parameters and
+%%	the location of the 3D points. Hence is BA an optimization problem
+%%	which iteratively computes projection of the 3D points onto the image plane 
+%%	and computes the reprojection error, i.e.
+%%	the difference between the projected 3D point on the image plane with the actual. 
+%%	The Jacobian is then applied to minimize the reprojection error. 
+%%	But because not all points are visible from all cameras, there will be some 
+%%	
+%%		\begin{figure}[H]
+%%		\centering
+%%		
+%%		%\includegraphics[width=0.7\linewidth]{../../../Desktop/Jacobian-matrix-for-a-bundle-adjustment-problem-con-sisting-of-3-cameras-and-4-points}
+%%		\caption{Data dependent sparse matrix stemming from Bundle Adjustment (Stolen
+%%			from
+%%			\url{https://www.researchgate.net/figure/Jacobian-matrix-for-a-bundle-adjustment-problem-con-sisting-of-3-cameras-and-4-points_fig1_284154527})}
+%%		
+%%		\label{fig:jacobian-matrix-for-a-bundle-adjustment-problem-con-sisting-of-3-cameras-and-4-points}
+%%	\end{figure}
+%%	Note that for showing the natural sparsity of the Jacobian we have to represent
+%%	the input data as one long vector
+%%	i.e. our input data has the form $\lbrack \texttt{cam1} \ \texttt{cam2} \
+%%	\texttt{cam3}\ X_1\ X_2\ X_3\ X_4 \rbrack $,
+%%	where only one pair of \texttt{camX} and $X_i$ are non-zero for each data-row.
+%%	The Jacobian sparsity pattern hence depends on the input, for example if we swap
+%%	the columns \texttt{cam1} and \texttt{cam2}, keeping all else the same,
+%%	the sparsity pattern of the Jacobian also changes.
+%	
+%%	\item The presented graph colouring algorithm is an approximation algorithm.
+%%	While it performs reasonable in practice it does rarely yield an optimal
+%%	colouring
+%
+%
+%
+%
+%
+%
+%
+%\section{Conclusion}
+%
+%
+%
+%
+%	\newpage
+%	\newpage
+%
+%	\appendix
+%	\section{Legacy stuff}
+%	\subsection{Example: Data-independent sparsity}
+%
+%	This section is based on Julia's approach to sparse AD computation.
+%	Link: \url{https://github.com/JuliaDiffEq/SparseDiffTools.jl}.
+%
+%	Below is a function which performs a 1D-convolution on the input array $x$ of
+%	dimension $n$.
+%	The Jacobian of such a function is the tri-diagonal matrix shown in Figure
+%	\ref{fig:tridiag}.
+%	\begin{minted}{C}
+%	int* f (int* x, int n) {
+%	retval = malloc(sizeof(int) * n);
+%	for (int i = 1; i < n - 1; i++) {
+%	retval[i] = x[i-1] + x[i] + x[i+1];
+%	}
+%	retval[0] = x[0] + x[1];
+%	retval[n-1] = x[n-1] + x[n-2];
+%	return retval;
+%	}
+%	\end{minted}
+%	\begin{figure}[H]
+%		$$ J_{f} = \left(\begin{matrix}
+%		\frac{\partial f_1}{\partial x_1} & \frac{\partial f_1}{\partial x_2} & 0 & 0 &
+%		0 \\
+%		\frac{\partial f_2}{\partial x_1}& \frac{\partial f_2}{\partial x_2} &
+%		\frac{\partial f_2}{\partial x_3} & 0 & 0\\
+%		0 & \frac{\partial f_3}{\partial x_2} & \frac{\partial f_3}{\partial x_3} &
+%		\frac{\partial f_3}{\partial x_4} & 0\\
+%		0 & 0 & \frac{\partial f_4}{\partial x_3} & \frac{\partial f_4}{\partial x_4} &
+%		\frac{\partial f_4}{\partial x_5} \\
+%		0 & 0 & 0 & \frac{\partial f_5}{\partial x_4} & \frac{\partial f_5}{\partial
+%			x_5}
+%		\end{matrix}\right) $$
+%		\caption{Jacobian from \texttt{f} for $n=5$}
+%
+%	\end{figure}
+%	The sparsity of the Jacobian in this case is independent of the data, e.g. $x_1$
+%	will always be independent of $f_5$
+%	or more generally the off tri-diagonal elements will always be zero.
+%	Of course the case where the input value is zero, e.g. $x_1 = 0$  the entry
+%	$\frac{\partial f_1}{\partial x_1}$ will also be zero, which would then be
+%	\emph{data} dependent.
+%
+%	\subsection{Example: Bundle Adjustment - Data-dependent}
+%	For a data-dependent example we use  Bundle Adjustment \footnote{Link to Wiki}
+%	as example and
+%	show that the layout of the Jacobian depends on how we represent our data as
+%	shown in Figure
+%	\ref{fig:jacobian-matrix-for-a-bundle-adjustment-problem-con-sisting-of-3-cameras-and-4-points}.
+%	Note that for showing the natural sparsity of the Jacobian we have to represent
+%	the input data as one long vector
+%	i.e. our input data has the form $\lbrack \texttt{cam1} \ \texttt{cam2} \
+%	\texttt{cam3}\ X_1\ X_2\ X_3\ X_4 \rbrack $,
+%	where only one pair of \texttt{camX} and $X_i$ are non-zero for each data-row.
+%	The Jacobian sparsity pattern hence depends on the input, for example if we swap
+%	the columns \texttt{cam1} and \texttt{cam2}, keeping all else the same,
+%	the sparsity pattern of the Jacobian also changes.
+%
+%
+%
+%	\subsection{Sparsity w.r.t. performance}
+%	For Forward-mode AD we can reduce the computation of both types of sparsity with
+%	a \texttt{colour} vector,
+%	which  denotes which input parameters are independent (or dependent) of each
+%	other.
+%	This corresponds to solving a graph-colouring problem.
+%	For example for the function \texttt{f} above we can use a color vector
+%	with three colours as each output value depends on at most three input values.
+%	A colour vector for $n=5$ could then be $\lbrack c_0, c_1, c_2, c_1, c_0\rbrack$
+%	where input values with the
+%	same colour can be computed during the same forward-sweep, so we reduce the
+%	number of
+%	forward calls to the number of colours used. Worth noting is that \texttt{f}'s
+%	colour vector
+%	\emph{always}  contains 3 colours; independent of $n$ so the number of forward
+%	calls
+%	is effectively reduced by  $n-3 + 1$ in this case. (Plus one since we need to
+%	compute the colour vector)\newline
+%	For finding the colour-vector we can perform a forward sweep of the function
+%	with some random input and use some underlying data-structure to solve the
+%	graph-colouring problem.
+%	Alternatively can one let the user provide the color vector.
+%
+%	\subsubsection{Bundle Adjustment revisited}
+%	For Bundle Adjustment we can also use the same approach by seeding the forward
+%	sweep
+%	with the camera and point data. Using the data it's possible to figure out the
+%	dependencies and generate a
+%	coloring, which in this case would be a matrix, one for each data-row.
+%	In stochastic gradient descent methods, like used Bundle Adjustment, this color
+%	vector can provide a speed-up on subsequent
+%	computations of the Jacobian.
+%	However if the data is only used once, this approach requires that we compute
+%	the coloring again and again
+%	and hence would not be very efficient.
+%
+%
+%	\subsection{Sparsity w.r.t. Memory}
+%	Julia and STAN uses a sparse data structures but to my knowledge not feasible in
+%	Futhark?
+%	Need more time to look into this.
+
 	\newpage
 	\nocite{*}
 	\printbibliography
-	
-	
+
+
 \end{document}
